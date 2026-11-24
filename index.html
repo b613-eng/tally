@@ -143,6 +143,9 @@ button { cursor: pointer; }
 .pick strong { overflow-wrap: anywhere; }
 .pick .kc { font-family: var(--font-display); font-size: 22px; font-variant-numeric: tabular-nums; }
 .small2 { font-size: 12px; color: var(--muted); margin: 0; }
+.pbar { height: 10px; border-radius: 5px; background: var(--track); overflow: hidden; }
+.pbar i { display: block; height: 100%; background: var(--move); border-radius: 5px; }
+#goalPath { display: flex; flex-direction: column; gap: 8px; }
 .fold { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
 .fold > summary { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 14px 16px; cursor: pointer; list-style: none; }
 .fold > summary::-webkit-details-marker { display: none; }
@@ -314,6 +317,7 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
       <button class="chip" type="button" data-add="move" data-v="20" data-a="walk" data-l="m">+20 min brisk walk</button>
       <button class="chip" type="button" data-add="move" data-v="30" data-a="dance" data-l="m">+30 min dance</button>
     </div>
+    <div class="chips" id="moveRecent"></div>
     <form class="row" id="moveForm">
       <select class="grow" id="actType" aria-label="Type of activity">
         <option value="walk">Walk</option>
@@ -363,6 +367,7 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     <div class="stat">
       <div class="num"><strong id="weightNum"></strong><div class="wnote" id="weightSub"></div></div>
     </div>
+    <div id="goalPath"></div>
     <div id="weightChart"></div>
     <form class="row" id="weightForm">
       <input class="small" id="weightIn" type="number" inputmode="decimal" step="0.1" min="20" max="500" placeholder="weight" aria-label="Weight" required>
@@ -556,7 +561,7 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     var base = bmr * (p.life || 1.2), bmi = kg / Math.pow(p.h / 100, 2), goal = p.goal || 'keep', note = '';
     if (p.age < 18 && goal !== 'keep') { goal = 'keep'; note = 'under18'; }
     else if (goal === 'lose' && bmi < 18.5) { goal = 'keep'; note = 'lowbmi'; }
-    var floor = p.sex === 'm' ? 1500 : 1200, d = 0;
+    var floor = (p.sex === 'm' ? 1500 : 1200) + (bmi >= 30 ? 300 : 0), d = 0; // a higher minimum for larger bodies
     // 7700 kcal per kg. Limits: at most 1% of body weight a week, at most 1,000 kcal a day, and a share of the base that grows with BMI.
     var capPct = bmi >= 35 ? 0.4 : bmi >= 30 ? 0.3 : bmi >= 25 ? 0.25 : 0.2;
     if (goal === 'lose') d = Math.min(Math.min(p.pace || 0.5, kg * 0.01) * 1100, base * capPct, 1000);
@@ -776,6 +781,24 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
       } else meta.textContent = 'Target ' + fmtW(state.targetKg) + ' ' + u;
     } else meta.textContent = '';
     $('#weightChart').innerHTML = weightChart();
+    var gp = '';
+    if (state.targetKg && state.weights.length) {
+      var first = state.weights[0].kg, cur = state.weights[state.weights.length - 1].kg, tgt = state.targetKg;
+      if (first > tgt) {
+        var togo = cur - tgt, pct = Math.max(0, Math.min(1, (first - cur) / (first - tgt)));
+        if (togo <= 0) gp = '<p class="small2"><strong>Goal reached.</strong> Switch your profile to Maintain so your calories rise to match what you burn.</p>';
+        else {
+          gp = '<div class="pbar" role="img" aria-label="' + Math.round(pct * 100) + ' percent of the way to your goal"><i style="width:' + (pct * 100).toFixed(0) + '%"></i></div>' +
+            '<p class="small2">Start ' + fmtW(first) + ' · now ' + fmtW(cur) + ' · goal ' + fmtW(tgt) + ' ' + u + '. ' + fmtW(togo) + ' ' + u + ' to go (' + Math.round(pct * 100) + '% done).</p>';
+          var pl2 = plan(today);
+          if (pl2 && pl2.goal === 'lose' && pl2.planned > 0) {
+            var wks = togo / (pl2.planned * 7 / 7700);
+            gp += '<p class="small2">At your planned pace that is about ' + Math.ceil(wks) + ' weeks, around ' + parse(addDays(today, Math.round(wks * 7))).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) + '. Real progress varies, and this updates as your weight changes.</p>';
+          }
+        }
+      }
+    }
+    $('#goalPath').innerHTML = gp;
   }
 
   /* ---- food list: [name, kcal per 100 g, serving in g, serving name]. Typical averages, built in, works offline. ---- */
@@ -947,7 +970,24 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     var cut = addDays(today, -35), l = state.weights.filter(function (w) { return w.date >= cut; });
     if (l.length < 2) return null;
     var a = l[0], b = l[l.length - 1], span = (parse(b.date) - parse(a.date)) / 86400000;
+    weighSpan = span;
     return span < 7 ? null : (b.kg - a.kg) / (span / 7);
+  }
+  var weighSpan = 0;
+  function renderMoveRecent() {
+    var seen = {}, out = [], dates = Object.keys(state.days).sort().reverse().slice(0, 14);
+    dates.forEach(function (d) {
+      state.days[d].slice().sort(function (x, y) { return y.t - x.t; }).forEach(function (e) {
+        var act = e.k === 'move' ? actOf(e) : null;
+        if (!act || !e.a) return;
+        var key = act.a + '|' + act.l + '|' + e.v;
+        if (seen[key] || out.length >= 3) return;
+        seen[key] = 1; out.push({ a: act.a, l: act.l, v: e.v });
+      });
+    });
+    $('#moveRecent').innerHTML = out.length ? '<span class="small2" style="align-self:center">Your usual:</span>' + out.map(function (o) {
+      return '<button class="chip" type="button" data-add="move" data-v="' + o.v + '" data-a="' + o.a + '" data-l="' + o.l + '">' + o.v + ' min ' + ACT[o.a].n.toLowerCase() + ', ' + LV[o.l].toLowerCase() + '</button>';
+    }).join('') : '';
   }
   var profOpened = false;
   function renderBalance() {
@@ -993,7 +1033,16 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     if (ws.days >= 3) {
       u.push('Last 7 days, ' + ws.days + ' days logged: average ' + (ws.avg >= 0 ? num(ws.avg) + ' kcal under' : num(-ws.avg) + ' kcal over') + ' your estimated burn, about ' + dW(-ws.avg * 7 / 7700) + ' a week by the numbers.');
     } else u.push('Log at least 3 days to see your weekly average.');
-    if (wt !== null) u.push('Your weigh-ins show ' + dW(wt) + ' a week. Body weight swings a kilo or two from water, so judge it over weeks. The weigh-ins are the real measure.');
+    if (wt !== null) {
+      var cm = 'Your weigh-ins show ' + dW(wt) + ' a week. Body weight swings a kilo or two from water, so judge it over weeks. The weigh-ins are the real measure.';
+      if (pl.goal === 'lose' && weighSpan >= 14) {
+        var P = pl.planned * 7 / 7700, A = -wt;
+        if (A < 0.4 * P) cm += ' Check-in: slower than planned. First check that you log everything and weigh under the same conditions. Do not cut calories further yet.';
+        else if (A > 1.3 * P) cm += ' Check-in: faster than planned. If you feel tired or very hungry, eat a little more.';
+        else cm += ' Check-in: on track.';
+      }
+      u.push(cm);
+    }
     if (ws.low >= 3) u.push('You have eaten below the safe minimum on ' + ws.low + ' of the last 7 days. If eating enough feels hard, a doctor or dietitian can help.');
     if (pl.note === 'under18') u.push('Because you are under 18, this shows maintenance only. Growing bodies need fuel, and a doctor can advise on weight.');
     if (pl.note === 'lowbmi') u.push('Your BMI is under 18.5, so a weight-loss target is not recommended. This is set to maintenance.');
@@ -1138,6 +1187,7 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     renderRecent();
     renderBalance();
     updateActHint();
+    renderMoveRecent();
   }
 
   /* ---- events ---- */
