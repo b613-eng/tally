@@ -143,6 +143,15 @@ button { cursor: pointer; }
 .pick strong { overflow-wrap: anywhere; }
 .pick .kc { font-family: var(--font-display); font-size: 22px; font-variant-numeric: tabular-nums; }
 .small2 { font-size: 12px; color: var(--muted); margin: 0; }
+.fold { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
+.fold > summary { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 14px 16px; cursor: pointer; list-style: none; }
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary h2 { margin-right: auto; }
+.fold > summary .sm { font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }
+.fold > summary::after { content: ""; flex: none; width: 8px; height: 8px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg) translate(-2px, -2px); }
+.fold[open] > summary::after { transform: rotate(-135deg) translate(-2px, -2px); }
+.fold > .in { padding: 0 16px 16px; display: flex; flex-direction: column; gap: 14px; }
+summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 12px; }
 .kv { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; font-size: 14px; margin: 0; }
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
@@ -328,8 +337,9 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     <div class="adv" id="moveAdv" hidden></div>
   </section>
 
-  <section class="card" aria-labelledby="hBal">
-    <div class="card-head"><h2 id="hBal">Energy balance</h2><span class="muted" id="balMeta"></span></div>
+  <details class="fold" id="foldBal">
+    <summary><h2 id="hBal">Energy balance</h2><span class="muted sm" id="balMeta"></span></summary>
+    <div class="in">
     <div id="balBody" style="display:flex;flex-direction:column;gap:12px"></div>
     <details class="more" id="profDet">
       <summary>Your profile</summary>
@@ -339,13 +349,14 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
         <label for="pfH">Height (cm)<input id="pfH" type="number" inputmode="numeric" min="100" max="230" required></label>
         <label for="pfLife">Daily life, outside workouts<select id="pfLife"><option value="1.2">Mostly sitting</option><option value="1.35">On my feet part of the day</option><option value="1.5">On my feet most of the day</option></select></label>
         <label for="pfGoal">Goal<select id="pfGoal"><option value="lose">Lose weight</option><option value="keep">Maintain weight</option><option value="gain">Gain slowly</option></select></label>
-        <label for="pfPace" id="pfPaceWrap">Pace<select id="pfPace"><option value="0.25">Gentle</option><option value="0.5" selected>Steady</option><option value="0.75">Faster</option></select></label>
+        <label for="pfPace" id="pfPaceWrap">Pace<select id="pfPace"><option value="0.25">Gentle</option><option value="0.5" selected>Steady</option><option value="0.75">Faster</option><option value="1">Fastest</option></select></label>
         <label class="full chk" for="pfAuto"><input id="pfAuto" type="checkbox" checked> Use the calculated target as my daily calorie goal</label>
         <div class="full row"><button class="btn" type="submit">Save profile</button></div>
       </form>
     </details>
     <p class="small2">These are estimates, not medical advice. Check with a doctor first if you are under 18, pregnant, have a medical condition, or have ever struggled with disordered eating.</p>
-  </section>
+    </div>
+  </details>
 
   <section class="card" aria-labelledby="hWeight">
     <div class="card-head"><h2 id="hWeight">Weight</h2><span class="muted" id="weightMeta"></span></div>
@@ -370,10 +381,12 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     </details>
   </section>
 
-  <section class="card" aria-labelledby="hLog">
-    <h2 id="hLog">Log</h2>
-    <ul class="log" id="log"></ul>
-  </section>
+  <details class="fold" id="foldLog">
+    <summary><h2 id="hLog">Log</h2><span class="muted sm" id="logMeta"></span></summary>
+    <div class="in">
+      <ul class="log" id="log"></ul>
+    </div>
+  </details>
 
   <section class="card" aria-labelledby="hWeek">
     <h2 id="hWeek">Last 7 days</h2>
@@ -544,7 +557,9 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     if (p.age < 18 && goal !== 'keep') { goal = 'keep'; note = 'under18'; }
     else if (goal === 'lose' && bmi < 18.5) { goal = 'keep'; note = 'lowbmi'; }
     var floor = p.sex === 'm' ? 1500 : 1200, d = 0;
-    if (goal === 'lose') d = Math.min(Math.min(p.pace || 0.5, kg * 0.01) * 1100, base * 0.25); // 7700 kcal per kg, at most 1% of body weight a week, at most 25% below base
+    // 7700 kcal per kg. Limits: at most 1% of body weight a week, at most 1,000 kcal a day, and a share of the base that grows with BMI.
+    var capPct = bmi >= 35 ? 0.4 : bmi >= 30 ? 0.3 : bmi >= 25 ? 0.25 : 0.2;
+    if (goal === 'lose') d = Math.min(Math.min(p.pace || 0.5, kg * 0.01) * 1100, base * capPct, 1000);
     else if (goal === 'gain') d = -250;
     var t0 = Math.max(base - d, Math.min(floor, base));
     var ex = exTotal(date), ef = goal === 'lose' ? 0.5 : 1;
@@ -905,7 +920,7 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     var def = pl.tdee - eaten, pt = pl.planned + (1 - pl.ef) * pl.ex, pct = Math.round(def / pl.tdee * 100);
     if (pl.goal === 'lose') {
       if (eaten < pl.floor) return { tone: 'warn', t: 'Below a safe minimum', x: 'You logged ' + num(eaten) + ' kcal and the safe minimum is ' + num(pl.floor) + '. Eating this little tends to backfire with low energy, hunger and overeating later. If you logged everything, eat a bit more tomorrow.' };
-      if (def > 0.25 * pl.tdee) return { tone: 'warn', t: 'Deficit bigger than needed', x: 'About ' + num(def) + ' kcal under your burn (' + pct + '%). Big gaps cost muscle and energy. Aim nearer ' + num(Math.round(pt)) + '.' };
+      if (def > Math.max(0.25 * pl.tdee, pl.planned + 0.5 * pl.ex + 150)) return { tone: 'warn', t: 'Deficit bigger than needed', x: 'About ' + num(def) + ' kcal under your burn (' + pct + '%). Big gaps cost muscle and energy. Aim nearer ' + num(Math.round(pt)) + '.' };
       if (def >= 0.6 * pt && def <= 1.25 * pt) return { tone: 'ok', t: 'Right on plan', x: 'About ' + num(def) + ' kcal under your estimated burn. That pace is steady and sustainable.' };
       if (def > 1.25 * pt) return { tone: 'info', t: 'Deeper than planned', x: 'About ' + num(def) + ' kcal under your burn. Fine now and then. Steady beats fast.' };
       if (def >= 0) return { tone: 'info', t: 'Smaller deficit than planned', x: 'About ' + num(def) + ' kcal under your burn. Still moving the right way. The weekly average matters, not one day.' };
@@ -939,7 +954,7 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     var body = $('#balBody'), meta = $('#balMeta'), p = state.profile, pl = plan(sel), h = '';
     if (!p) {
       meta.textContent = '';
-      if (!profOpened) { $('#profDet').open = true; profOpened = true; }
+      if (!profOpened) { $('#profDet').open = true; $('#foldBal').open = true; profOpened = true; }
       body.innerHTML = '<p class="small2">Fill in your profile below. The app will estimate what you burn each day, including your walking and dancing, and tell you how much to eat.</p>';
       return;
     }
@@ -949,10 +964,12 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
       return;
     }
     var eaten = total(sel, 'cal'), rem = pl.target - eaten;
-    meta.textContent = pl.goal === 'lose' ? 'Goal: lose about ' + dW(-pl.planned * 7 / 7700).replace('−', '') + ' a week' : pl.goal === 'gain' ? 'Goal: gain slowly' : 'Goal: maintain';
+    var gt = pl.goal === 'lose' ? 'Goal: lose about ' + (Math.round(fromKg(pl.planned * 7 / 7700) * 20) / 20) + ' ' + state.unit + ' a week' : pl.goal === 'gain' ? 'Goal: gain slowly' : 'Goal: maintain weight';
+    meta.textContent = num(pl.target) + ' kcal to eat';
     var why = pl.ex > 0
       ? 'Base ' + num(pl.t0) + ' plus ' + (pl.ef === 1 ? 'all' : 'half') + ' of your ' + num(pl.ex) + ' kcal of exercise.'
       : 'Base ' + num(pl.t0) + '. It rises when you log walking or dancing.';
+    h += '<p class="small2">' + gt + '</p>';
     h += '<div class="num"><strong>' + num(pl.target) + ' <small>kcal to eat ' + (sel === today ? 'today' : 'this day') + '</small></strong><span>' + why + '</span></div>';
     h += '<dl class="kv">' +
       '<dt>Resting (your body at rest)</dt><dd>' + num(pl.bmr) + '</dd>' +
@@ -1092,6 +1109,7 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     $('#moveSub').textContent = move >= g.move ? 'Goal reached' : (g.move - move) + ' min to go';
 
     var list = entriesOf(sel).slice().sort(function (a, b) { return b.t - a.t; });
+    $('#logMeta').textContent = list.length ? list.length + (list.length === 1 ? ' entry' : ' entries') : 'Empty';
     $('#log').innerHTML = list.length ? list.map(function (e) {
       var what = e.k === 'cal' ? num(e.v) + ' kcal' + (e.note ? ' &middot; ' + esc(e.note) : '')
         : e.k === 'water' ? '1 glass of water'
@@ -1240,6 +1258,11 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     saveLocal(); pushMeta(); render(); toast(state.targetKg ? 'Target saved' : 'Target cleared');
   });
 
+  ['foldBal', 'foldLog'].forEach(function (id) {
+    var d = document.getElementById(id), key = 'daily-tally-fold-' + id;
+    try { if (localStorage.getItem(key) === '1') d.open = true; } catch (e) {}
+    d.addEventListener('toggle', function () { try { localStorage.setItem(key, d.open ? '1' : '0'); } catch (e) {} });
+  });
   fillProfile();
   setSoundBtn();
   setNote(false);
