@@ -133,6 +133,16 @@ button { cursor: pointer; }
 .bar i { display: block; width: 100%; border-radius: 3px; }
 .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--muted); margin-top: 10px; }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
+.food { display: flex; flex-direction: column; gap: 10px; }
+.foodres { display: flex; flex-direction: column; gap: 6px; }
+.fr { display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: transparent; text-align: left; }
+.fr:hover { background: var(--track); }
+.fr .fn { min-width: 0; overflow-wrap: anywhere; }
+.fr .fk { flex: none; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pick { border: 1px solid var(--cal); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.pick strong { overflow-wrap: anywhere; }
+.pick .kc { font-family: var(--font-display); font-size: 22px; font-variant-numeric: tabular-nums; }
+.food .small2 { font-size: 12px; color: var(--muted); margin: 0; }
 .wl { fill: var(--muted); font-size: 11px; font-family: var(--font-body); }
 details.more summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; color: var(--muted); font-size: 14px; }
 .wnote { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
@@ -216,6 +226,32 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     <div class="stat">
       <div id="calRing"></div>
       <div class="num"><strong id="calNum"></strong><span id="calSub"></span></div>
+    </div>
+    <div class="food">
+      <div class="row"><input class="grow" id="foodQ" type="search" autocomplete="off" placeholder="Search food: rice, ful, apple..." aria-label="Search food"></div>
+      <div class="foodres" id="foodRes"></div>
+      <div class="pick" id="foodPick" hidden>
+        <strong id="pickName"></strong>
+        <div class="row">
+          <input class="small" id="pickQty" type="number" inputmode="decimal" step="0.5" min="0.1" value="1" aria-label="Amount">
+          <select class="grow" id="pickUnit" aria-label="Unit"></select>
+        </div>
+        <div class="kc" id="pickKcal"></div>
+        <div class="row">
+          <button class="btn cal" id="pickAdd" type="button">Add to today</button>
+          <button class="btn ghost" id="pickCancel" type="button">Cancel</button>
+        </div>
+      </div>
+      <div class="chips" id="recent"></div>
+      <p class="small2">Calories are typical averages and can differ by recipe and portion.</p>
+      <details class="more">
+        <summary>Save my own food</summary>
+        <form class="row" id="myFoodForm">
+          <input class="grow" id="myFoodName" type="text" maxlength="40" placeholder="Name" aria-label="Food name" required>
+          <input class="small" id="myFoodKcal" type="number" inputmode="numeric" min="1" max="5000" placeholder="kcal per serving" aria-label="Calories per serving" required>
+          <button class="btn ghost" type="submit">Save</button>
+        </form>
+      </details>
     </div>
     <div class="chips">
       <button class="chip" type="button" data-add="cal" data-v="100">+100</button>
@@ -348,6 +384,8 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
   state.weights = Array.isArray(state.weights) ? state.weights : [];
   state.unit = state.unit === 'lb' ? 'lb' : 'kg';
   state.targetKg = typeof state.targetKg === 'number' ? state.targetKg : null;
+  state.customFoods = Array.isArray(state.customFoods) ? state.customFoods : [];
+  state.recent = Array.isArray(state.recent) ? state.recent : [];
   function saveLocal() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
 
   /* ---- optional sync to the viewer's private store ---- */
@@ -372,7 +410,7 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
   }
   function pushMeta() {
     if (!col) return;
-    var copy = JSON.parse(JSON.stringify({ adj: state.adj, plans: state.plans, bank: state.bank, banked: state.banked, weights: state.weights, unit: state.unit, targetKg: state.targetKg }));
+    var copy = JSON.parse(JSON.stringify({ adj: state.adj, plans: state.plans, bank: state.bank, banked: state.banked, weights: state.weights, unit: state.unit, targetKg: state.targetKg, customFoods: state.customFoods, recent: state.recent }));
     enqueue('meta', function () { return col.doc('meta').set(copy); });
   }
 
@@ -623,6 +661,111 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     $('#weightChart').innerHTML = weightChart();
   }
 
+  /* ---- food list: [name, kcal per 100 g, serving in g, serving name]. Typical averages, built in, works offline. ---- */
+  var FOODS = [
+    ['Aish baladi (flatbread loaf)', 270, 90, 'loaf'], ['Pita bread', 275, 60, 'pita'], ['White bread', 265, 30, 'slice'],
+    ['Brown bread', 250, 30, 'slice'], ['Toast', 290, 25, 'slice'], ['Feteer meshaltet', 420, 120, 'piece'],
+    ['White rice, cooked', 130, 160, 'cup'], ['Brown rice, cooked', 123, 160, 'cup'], ['Pasta, cooked', 158, 140, 'cup'],
+    ['Koshari', 160, 350, 'plate'], ['Bulgur, cooked', 83, 150, 'cup'], ['Oats, dry', 389, 40, 'bowl'],
+    ['Cornflakes', 357, 30, 'bowl'], ['Potato, boiled', 87, 150, 'medium'], ['French fries', 312, 120, 'portion'],
+    ['Sweet potato, baked', 90, 150, 'medium'], ['Ful medames', 110, 200, 'plate'], ['Taameya (falafel)', 330, 25, 'piece'],
+    ['Lentils, cooked', 116, 200, 'cup'], ['Chickpeas, cooked', 164, 150, 'cup'], ['White beans, cooked', 140, 150, 'cup'],
+    ['Hummus', 166, 30, '2 tbsp'], ['Tahini', 595, 15, 'tbsp'], ['Molokhia (soup)', 50, 200, 'bowl'],
+    ['Mahshi (stuffed vine leaves)', 150, 30, 'piece'], ['Mixed salad', 20, 150, 'bowl'], ['Tomato', 18, 120, 'medium'],
+    ['Cucumber', 15, 100, 'medium'], ['Carrot', 41, 60, 'medium'], ['Avocado', 160, 100, 'half'],
+    ['Egg, boiled', 155, 50, 'egg'], ['Egg, fried', 196, 46, 'egg'], ['Omelette', 154, 100, 'portion'],
+    ['Chicken breast, grilled', 165, 120, 'breast'], ['Chicken thigh, roasted', 209, 100, 'thigh'], ['Fried chicken', 246, 100, 'piece'],
+    ['Beef, cooked', 250, 100, 'portion'], ['Kofta, grilled', 250, 50, 'piece'], ['Lamb, cooked', 294, 100, 'portion'],
+    ['Liver, cooked', 175, 100, 'portion'], ['Turkey breast', 135, 100, 'portion'], ['Fish, grilled', 128, 150, 'fillet'],
+    ['Tuna, canned', 116, 100, 'can'], ['Shrimp, cooked', 99, 100, 'portion'], ['Shawarma sandwich', 230, 250, 'sandwich'],
+    ['Beef burger sandwich', 250, 220, 'burger'], ['Pizza', 266, 107, 'slice'], ['Milk, whole', 61, 240, 'cup'],
+    ['Milk, skim', 34, 240, 'cup'], ['Yogurt, plain', 61, 150, 'cup'], ['Greek yogurt', 97, 150, 'cup'],
+    ['Feta cheese', 264, 30, 'piece'], ['White cheese (Domiti)', 250, 30, 'piece'], ['Cheddar cheese', 403, 30, 'slice'],
+    ['Cottage cheese', 98, 100, 'portion'], ['Apple', 52, 180, 'medium'], ['Banana', 89, 120, 'medium'],
+    ['Orange', 47, 150, 'medium'], ['Mango', 60, 200, 'cup'], ['Grapes', 69, 100, 'handful'],
+    ['Watermelon', 30, 150, 'slice'], ['Strawberries', 32, 150, 'cup'], ['Guava', 68, 100, 'fruit'],
+    ['Dates', 282, 8, 'date'], ['Almonds', 579, 28, 'handful'], ['Peanuts', 567, 28, 'handful'],
+    ['Walnuts', 654, 28, 'handful'], ['Peanut butter', 588, 16, 'tbsp'], ['Olive oil', 884, 14, 'tbsp'],
+    ['Butter', 717, 14, 'tbsp'], ['Ghee', 900, 13, 'tbsp'], ['Sugar', 387, 4, 'tsp'],
+    ['Honey', 304, 21, 'tbsp'], ['Jam', 250, 20, 'tbsp'], ['Tea with 1 tsp sugar', 7, 240, 'cup'],
+    ['Cola', 42, 330, 'can'], ['Orange juice', 45, 250, 'glass'], ['Basbousa', 350, 70, 'piece'],
+    ['Kunafa', 380, 100, 'portion'], ['Baklava', 430, 40, 'piece'], ['Om Ali', 280, 150, 'bowl'],
+    ['Rice pudding', 130, 150, 'bowl'], ['Cake', 350, 80, 'slice'], ['Ice cream', 207, 70, 'scoop'],
+    ['Dark chocolate', 546, 20, 'piece'], ['Digestive biscuit', 480, 15, 'biscuit'], ['Potato chips', 536, 30, 'small bag']
+  ];
+  var lastRes = [], pick = null;
+  function foodList() {
+    var l = state.customFoods.map(function (c) { return { n: c.n, p: c.k, g: 100, s: 'serving', c: true }; });
+    FOODS.forEach(function (f) { l.push({ n: f[0], p: f[1], g: f[2], s: f[3], c: false }); });
+    return l;
+  }
+  function searchFoods(q) {
+    var w = q.toLowerCase().split(/\s+/).filter(Boolean);
+    if (!w.length) return [];
+    return foodList().filter(function (f) {
+      var n = f.n.toLowerCase();
+      return w.every(function (x) { return n.indexOf(x) >= 0; });
+    }).slice(0, 6);
+  }
+  function foodKcal(f, qty, unit) {
+    if (f.c) return qty * f.p;
+    return unit === 'g' ? qty * f.p / 100 : qty * f.g * f.p / 100;
+  }
+  function renderFoodRes() {
+    var q = $('#foodQ').value.trim();
+    lastRes = searchFoods(q);
+    var h = '';
+    if (q && !lastRes.length) h = '<p class="small2">No match. Save it under "Save my own food", or type the calories yourself below.</p>';
+    else h = lastRes.map(function (f, i) {
+      var k = f.c ? f.p : Math.round(f.g * f.p / 100);
+      return '<button class="fr" type="button" data-food="' + i + '"><span class="fn">' + esc(f.n) + '</span><span class="fk">' + k + ' kcal / ' + esc(f.s) + '</span></button>';
+    }).join('');
+    $('#foodRes').innerHTML = h;
+  }
+  function updatePick() {
+    if (!pick) return 0;
+    var k = Math.round(foodKcal(pick, Number($('#pickQty').value) || 0, $('#pickUnit').value));
+    $('#pickKcal').textContent = '≈ ' + num(k) + ' kcal';
+    return k;
+  }
+  function openPick(i) {
+    pick = lastRes[i];
+    if (!pick) return;
+    $('#pickName').textContent = pick.n;
+    $('#pickUnit').innerHTML = '<option value="s">' + esc(pick.s) + (pick.c ? '' : ' (' + pick.g + ' g)') + '</option>' + (pick.c ? '' : '<option value="g">grams</option>');
+    $('#pickQty').value = 1;
+    $('#foodRes').innerHTML = '';
+    $('#foodPick').hidden = false;
+    updatePick();
+    $('#pickQty').focus();
+  }
+  function closePick() { pick = null; $('#foodPick').hidden = true; }
+  function remember(note, k) {
+    state.recent = [{ n: note, k: k }].concat(state.recent.filter(function (r) { return r.n !== note; })).slice(0, 6);
+    saveLocal(); pushMeta();
+  }
+  function addPick() {
+    if (!pick) return;
+    var qty = Number($('#pickQty').value), k = updatePick();
+    if (!(qty > 0) || !(k > 0)) return;
+    var unit = $('#pickUnit').value;
+    var note = (pick.n + ' × ' + qty + (unit === 'g' ? ' g' : ' ' + pick.s)).slice(0, 60);
+    closePick();
+    $('#foodQ').value = ''; $('#foodRes').innerHTML = '';
+    remember(note, k);
+    add('cal', k, note);
+  }
+  function addRecent(i) {
+    var r = state.recent[i];
+    if (r) { remember(r.n, r.k); add('cal', r.k, r.n); }
+  }
+  function renderRecent() {
+    var el = $('#recent');
+    el.innerHTML = state.recent.length ? '<span class="small2" style="align-self:center">Recent:</span>' + state.recent.map(function (r, i) {
+      return '<button class="chip" type="button" data-recent="' + i + '">' + esc(r.n) + ' · ' + r.k + '</button>';
+    }).join('') : '';
+  }
+
   function renderMission() {
     var m = metOf(sel), n = (m.cal ? 1 : 0) + (m.water ? 1 : 0) + (m.move ? 1 : 0), done = n === 3, left = [];
     if (!m.cal) left.push(calOver(sel) ? 'calories (over)' : 'calories');
@@ -755,6 +898,7 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     renderMission();
     renderAdv();
     renderWeight();
+    renderRecent();
   }
 
   /* ---- events ---- */
@@ -767,6 +911,8 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     else if (t.dataset.plan) { if (t.dataset.plan === 'undo') undoPlan(); else applyPlan(t.dataset.plan); }
     else if (t.dataset.bank) bankAction(t.dataset.bank, t.dataset.n);
     else if (t.dataset.wdel) removeWeight();
+    else if (t.dataset.food) openPick(Number(t.dataset.food));
+    else if (t.dataset.recent) addRecent(Number(t.dataset.recent));
   });
   $('#prev').addEventListener('click', function () { sel = addDays(sel, -1); render(); });
   $('#next').addEventListener('click', function () { if (sel < today) { sel = addDays(sel, 1); render(); } });
@@ -824,6 +970,21 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
   $('#stamp').addEventListener('click', function (e) { if (e.target === this) hideStamp(); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hideStamp(); });
 
+  $('#foodQ').addEventListener('input', function () { closePick(); renderFoodRes(); });
+  $('#pickQty').addEventListener('input', updatePick);
+  $('#pickUnit').addEventListener('change', updatePick);
+  $('#pickAdd').addEventListener('click', addPick);
+  $('#pickCancel').addEventListener('click', closePick);
+  $('#myFoodForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var n = $('#myFoodName').value.trim().slice(0, 40), k = Math.round(Number($('#myFoodKcal').value));
+    if (!n || !(k > 0)) return;
+    state.customFoods = state.customFoods.filter(function (c) { return c.n.toLowerCase() !== n.toLowerCase(); }).concat([{ n: n, k: k }]).slice(-200);
+    saveLocal(); pushMeta();
+    $('#myFoodName').value = ''; $('#myFoodKcal').value = '';
+    $('#foodQ').value = n; renderFoodRes();
+    toast('Saved. Find it by searching its name.');
+  });
   $('#weightForm').addEventListener('submit', function (e) {
     e.preventDefault();
     saveWeight($('#weightIn').value);
@@ -868,6 +1029,8 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
             if (Array.isArray(v.weights)) state.weights = v.weights;
             if (v.unit === 'kg' || v.unit === 'lb') state.unit = v.unit;
             if (typeof v.targetKg === 'number' || v.targetKg === null) state.targetKg = v.targetKg;
+            if (Array.isArray(v.customFoods)) state.customFoods = v.customFoods;
+            if (Array.isArray(v.recent)) state.recent = v.recent;
           }
           else if (d.id.indexOf('d-') === 0 && v.date) { remoteDays[v.date] = true; state.days[v.date] = Array.isArray(v.entries) ? v.entries : []; }
         });
@@ -877,7 +1040,7 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
           Object.keys(state.days).forEach(function (date) { if (!remoteDays[date] && state.days[date].length) pushDay(date); });
           var gl = state.goals;
           if (!hasGoals && (gl.cal !== DEFAULT_GOALS.cal || gl.water !== DEFAULT_GOALS.water || gl.move !== DEFAULT_GOALS.move)) pushGoals();
-          if (!hasMeta && (Object.keys(state.adj).length || Object.keys(state.plans).length || state.bank || Object.keys(state.banked).length || state.weights.length)) pushMeta();
+          if (!hasMeta && (Object.keys(state.adj).length || Object.keys(state.plans).length || state.bank || Object.keys(state.banked).length || state.weights.length || state.customFoods.length)) pushMeta();
         }
         saveLocal(); setNote(true); render();
       }, function () { col = null; setNote(false); });
