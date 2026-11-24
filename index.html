@@ -142,7 +142,21 @@ button { cursor: pointer; }
 .pick { border: 1px solid var(--cal); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
 .pick strong { overflow-wrap: anywhere; }
 .pick .kc { font-family: var(--font-display); font-size: 22px; font-variant-numeric: tabular-nums; }
-.food .small2 { font-size: 12px; color: var(--muted); margin: 0; }
+.small2 { font-size: 12px; color: var(--muted); margin: 0; }
+.kv { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; font-size: 14px; margin: 0; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.kv .sub { padding-left: 12px; font-size: 13px; }
+.kv .tot { border-top: 1px solid var(--line); padding-top: 6px; color: var(--fg); font-weight: 600; }
+.verdict { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.verdict strong { display: flex; align-items: center; gap: 8px; font-family: var(--font-display); font-size: 16px; }
+.verdict p { margin: 0; }
+.pform { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; padding-top: 4px; }
+.pform label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); min-width: 0; }
+.pform input, .pform select { min-height: 44px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); padding: 0 12px; color: var(--fg); min-width: 0; }
+.pform .full { grid-column: 1 / -1; }
+.pform .chk { flex-direction: row; align-items: center; gap: 10px; color: var(--fg); }
+.pform .chk input { min-height: 0; width: 20px; height: 20px; }
 .wl { fill: var(--muted); font-size: 11px; font-family: var(--font-body); }
 details.more summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; color: var(--muted); font-size: 14px; }
 .wnote { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
@@ -209,6 +223,7 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
         <label for="gWater">Water (glasses)<input id="gWater" type="number" inputmode="numeric" min="1" max="40"></label>
         <label for="gMove">Movement (minutes)<input id="gMove" type="number" inputmode="numeric" min="1" max="1440"></label>
       </div>
+      <p class="small2" id="gCalHint" hidden>Calories follow your calculated target while your profile is on. Change it under Energy balance.</p>
       <div class="row"><button class="btn" type="submit">Save goals</button></div>
     </form>
   </section>
@@ -286,19 +301,50 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
       <div class="num"><strong id="moveNum"></strong><span id="moveSub"></span></div>
     </div>
     <div class="chips">
-      <button class="chip" type="button" data-add="move" data-v="10" data-note="Walk">+10 min walk</button>
-      <button class="chip" type="button" data-add="move" data-v="20" data-note="Walk">+20 min walk</button>
-      <button class="chip" type="button" data-add="move" data-v="30" data-note="Workout">+30 min workout</button>
+      <button class="chip" type="button" data-add="move" data-v="10" data-a="walk" data-l="m">+10 min brisk walk</button>
+      <button class="chip" type="button" data-add="move" data-v="20" data-a="walk" data-l="m">+20 min brisk walk</button>
+      <button class="chip" type="button" data-add="move" data-v="30" data-a="dance" data-l="m">+30 min dance</button>
     </div>
     <form class="row" id="moveForm">
-      <input class="small" id="moveIn" type="number" inputmode="numeric" min="1" max="1440" placeholder="minutes" aria-label="Minutes to add" required>
-      <select class="small" id="moveKind" aria-label="Type of activity">
-        <option>Walk</option>
-        <option>Workout</option>
+      <select class="grow" id="actType" aria-label="Type of activity">
+        <option value="walk">Walk</option>
+        <option value="dance">Freestyle dance (MJ, James Brown, funk)</option>
+        <option value="work">Other exercise</option>
       </select>
+      <select class="grow" id="actLvl" aria-label="How hard it felt">
+        <option value="e">Easy</option>
+        <option value="m" selected>Moderate</option>
+        <option value="h">Hard</option>
+        <option value="x">All-out</option>
+      </select>
+      <input class="small" id="moveIn" type="number" inputmode="numeric" min="1" max="1440" placeholder="minutes" aria-label="Minutes to add" required>
       <button class="btn move" type="submit">Add</button>
     </form>
+    <p class="small2" id="actHint"></p>
+    <details class="more">
+      <summary>How to pick the effort</summary>
+      <p class="small2">Use the talk test. Easy: you could sing. Moderate: full sentences, but breathing harder. Hard: short sentences only, clearly sweating. All-out: a few words at most. If a session mixes effort, like 10 minutes of easy walking and 30 minutes of hard footwork, log each part on its own. Calories are estimated from standard activity values and your weight, so treat them as a guide, not an exact count.</p>
+    </details>
     <div class="adv" id="moveAdv" hidden></div>
+  </section>
+
+  <section class="card" aria-labelledby="hBal">
+    <div class="card-head"><h2 id="hBal">Energy balance</h2><span class="muted" id="balMeta"></span></div>
+    <div id="balBody" style="display:flex;flex-direction:column;gap:12px"></div>
+    <details class="more" id="profDet">
+      <summary>Your profile</summary>
+      <form class="pform" id="profForm">
+        <label for="pfSex">Sex (used in the formula)<select id="pfSex"><option value="f">Female</option><option value="m">Male</option></select></label>
+        <label for="pfAge">Age<input id="pfAge" type="number" inputmode="numeric" min="10" max="90" required></label>
+        <label for="pfH">Height (cm)<input id="pfH" type="number" inputmode="numeric" min="100" max="230" required></label>
+        <label for="pfLife">Daily life, outside workouts<select id="pfLife"><option value="1.2">Mostly sitting</option><option value="1.35">On my feet part of the day</option><option value="1.5">On my feet most of the day</option></select></label>
+        <label for="pfGoal">Goal<select id="pfGoal"><option value="lose">Lose weight</option><option value="keep">Maintain weight</option><option value="gain">Gain slowly</option></select></label>
+        <label for="pfPace" id="pfPaceWrap">Pace<select id="pfPace"><option value="0.25">Gentle</option><option value="0.5" selected>Steady</option><option value="0.75">Faster</option></select></label>
+        <label class="full chk" for="pfAuto"><input id="pfAuto" type="checkbox" checked> Use the calculated target as my daily calorie goal</label>
+        <div class="full row"><button class="btn" type="submit">Save profile</button></div>
+      </form>
+    </details>
+    <p class="small2">These are estimates, not medical advice. Check with a doctor first if you are under 18, pregnant, have a medical condition, or have ever struggled with disordered eating.</p>
   </section>
 
   <section class="card" aria-labelledby="hWeight">
@@ -386,6 +432,7 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
   state.targetKg = typeof state.targetKg === 'number' ? state.targetKg : null;
   state.customFoods = Array.isArray(state.customFoods) ? state.customFoods : [];
   state.recent = Array.isArray(state.recent) ? state.recent : [];
+  state.profile = state.profile && typeof state.profile === 'object' ? state.profile : null;
   function saveLocal() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
 
   /* ---- optional sync to the viewer's private store ---- */
@@ -410,7 +457,7 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
   }
   function pushMeta() {
     if (!col) return;
-    var copy = JSON.parse(JSON.stringify({ adj: state.adj, plans: state.plans, bank: state.bank, banked: state.banked, weights: state.weights, unit: state.unit, targetKg: state.targetKg, customFoods: state.customFoods, recent: state.recent }));
+    var copy = JSON.parse(JSON.stringify({ adj: state.adj, plans: state.plans, bank: state.bank, banked: state.banked, weights: state.weights, unit: state.unit, targetKg: state.targetKg, customFoods: state.customFoods, recent: state.recent, profile: state.profile }));
     enqueue('meta', function () { return col.doc('meta').set(copy); });
   }
 
@@ -419,14 +466,16 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
   function total(date, k) {
     return entriesOf(date).reduce(function (a, e) { return e.k === k ? a + e.v : a; }, 0);
   }
-  function add(k, v, note) {
+  function add(k, v, note, extra) {
     v = Math.round(Number(v));
     if (!(v > 0)) return;
     if (k === 'cal') v = Math.min(v, 10000);
     if (k === 'move') v = Math.min(v, 1440);
     var before = flags(sel);
     var list = (state.days[sel] = (state.days[sel] || []).slice());
-    list.push({ id: Math.random().toString(36).slice(2, 10), k: k, v: v, note: note || '', t: Date.now() });
+    var entry = { id: Math.random().toString(36).slice(2, 10), k: k, v: v, note: note || '', t: Date.now() };
+    if (extra) { entry.a = extra.a; entry.l = extra.l; }
+    list.push(entry);
     saveLocal(); pushDay(sel); render();
     celebrate(before, flags(sel));
   }
@@ -447,10 +496,63 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
 
   function goalFor(date, k) {
     var a = (state.adj[date] && state.adj[date][k]) || 0;
+    if (k === 'cal') {
+      var pl = autoPlan(date);
+      if (pl) return Math.max(Math.min(pl.floor, pl.base), pl.target + a);
+    }
     var g = state.goals[k] + a;
     if (k === 'cal') g = Math.max(Math.min(1200, state.goals.cal), g);
     return Math.max(1, g);
   }
+
+  /* ---- movement calories (MET method) and the daily energy plan ---- */
+  // Net MET = MET minus 1, because resting energy is already inside the daily base.
+  // Values follow the Compendium of Physical Activities for walking, general dance and general exercise.
+  // Freestyle dance (James Brown / MJ style) is matched to the general dance range, so it is an estimate.
+  var ACT = {
+    walk: { n: 'Walk', met: { e: 3.0, m: 4.3, h: 5.5, x: 7.0 } },
+    dance: { n: 'Freestyle dance', met: { e: 3.5, m: 5.0, h: 7.0, x: 7.8 } },
+    work: { n: 'Other exercise', met: { e: 3.5, m: 5.0, h: 7.0, x: 9.0 } }
+  };
+  var LV = { e: 'Easy', m: 'Moderate', h: 'Hard', x: 'All-out' };
+  function actOf(e) {
+    if (e.a && ACT[e.a]) return { a: e.a, l: LV[e.l] ? e.l : 'm' };
+    if (e.note === 'Walk') return { a: 'walk', l: 'm' };
+    if (e.note === 'Workout') return { a: 'work', l: 'm' };
+    return null;
+  }
+  function weightAt(date) {
+    var l = state.weights, r = null;
+    for (var i = 0; i < l.length; i++) if (l[i].date <= date) r = l[i];
+    if (!r && l.length) r = l[0];
+    return r ? r.kg : null;
+  }
+  function kcalFor(a, l, mins, kg) { return Math.max(0, (ACT[a].met[l] - 1) * kg * mins / 60); }
+  function exKcalOf(e, date) {
+    if (e.k !== 'move') return 0;
+    var act = actOf(e), kg = weightAt(date);
+    return act && kg ? kcalFor(act.a, act.l, e.v, kg) : 0;
+  }
+  function exTotal(date) { return entriesOf(date).reduce(function (s, e) { return s + exKcalOf(e, date); }, 0); }
+
+  // Mifflin-St Jeor resting energy, times a daily-life factor, gives the base. Logged exercise comes on top.
+  function plan(date) {
+    var p = state.profile, kg = weightAt(date);
+    if (!p || !kg || !(p.h > 0) || !(p.age > 0)) return null;
+    var bmr = 10 * kg + 6.25 * p.h - 5 * p.age + (p.sex === 'm' ? 5 : -161);
+    var base = bmr * (p.life || 1.2), bmi = kg / Math.pow(p.h / 100, 2), goal = p.goal || 'keep', note = '';
+    if (p.age < 18 && goal !== 'keep') { goal = 'keep'; note = 'under18'; }
+    else if (goal === 'lose' && bmi < 18.5) { goal = 'keep'; note = 'lowbmi'; }
+    var floor = p.sex === 'm' ? 1500 : 1200, d = 0;
+    if (goal === 'lose') d = Math.min(Math.min(p.pace || 0.5, kg * 0.01) * 1100, base * 0.25); // 7700 kcal per kg, at most 1% of body weight a week, at most 25% below base
+    else if (goal === 'gain') d = -250;
+    var t0 = Math.max(base - d, Math.min(floor, base));
+    var ex = exTotal(date), ef = goal === 'lose' ? 0.5 : 1;
+    return { kg: kg, bmr: Math.round(bmr), base: Math.round(base), bmi: bmi, goal: goal, note: note, floor: floor,
+      planned: Math.round(base - t0), t0: Math.round(t0), ex: Math.round(ex), ef: ef,
+      target: Math.round((t0 + ef * ex) / 10) * 10, tdee: Math.round(base + ex) };
+  }
+  function autoPlan(date) { return state.profile && state.profile.auto !== false ? plan(date) : null; }
   // Calories count as on target between 90% and 105% of the day's goal.
   function metOf(date) {
     var c = total(date, 'cal'), gc = goalFor(date, 'cal');
@@ -766,6 +868,123 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     }).join('') : '';
   }
 
+  function moveLabel(e) {
+    var act = actOf(e);
+    if (!act) return e.v + ' min' + (e.note ? ' &middot; ' + esc(e.note) : '');
+    var k = Math.round(exKcalOf(e, sel));
+    return e.v + ' min &middot; ' + ACT[act.a].n + ' &middot; ' + LV[act.l] + (k ? ' &middot; ~' + k + ' kcal' : '');
+  }
+  function updateActHint() {
+    var el = $('#actHint'), kg = weightAt(sel) || weightAt(today), mins = Number($('#moveIn').value) || 0, lv = $('#actLvl').value;
+    var d = { e: 'Easy: you could sing along.', m: 'Moderate: full sentences, breathing harder.', h: 'Hard: short sentences only, sweating.', x: 'All-out: a few words at most.' }[lv] + ' ';
+    if (!kg) { el.textContent = d + 'Add your weight in the Weight card to see calories burned.'; return; }
+    if (mins > 0) {
+      var k = Math.round(kcalFor($('#actType').value, lv, mins, kg));
+      el.textContent = d + '≈ ' + num(k) + ' kcal burned above resting. A rough estimate, it can be off by about a quarter either way.';
+    } else el.textContent = d + 'Mixed session? Log each part on its own, like 10 min Walk, then 30 min Freestyle dance.';
+  }
+  function fillProfile() {
+    var p = state.profile;
+    if (!p) return;
+    $('#pfSex').value = p.sex === 'm' ? 'm' : 'f';
+    $('#pfAge').value = p.age; $('#pfH').value = p.h;
+    $('#pfLife').value = String(p.life || 1.2);
+    $('#pfGoal').value = p.goal || 'keep';
+    $('#pfPace').value = String(p.pace || 0.5);
+    $('#pfAuto').checked = p.auto !== false;
+    $('#pfPaceWrap').hidden = $('#pfGoal').value !== 'lose';
+  }
+
+  /* ---- energy balance: what you burn, what to eat, and whether the day was in a healthy range ---- */
+  var TONE = { ok: 'var(--move)', info: 'var(--water)', warn: 'var(--cal)' };
+  function dW(kg) {
+    var v = Math.round(fromKg(Math.abs(kg)) * 10) / 10;
+    return (v > 0 ? (kg > 0 ? '+' : '−') : '') + v.toFixed(1) + ' ' + state.unit;
+  }
+  function dayVerdict(pl, eaten) {
+    var def = pl.tdee - eaten, pt = pl.planned + (1 - pl.ef) * pl.ex, pct = Math.round(def / pl.tdee * 100);
+    if (pl.goal === 'lose') {
+      if (eaten < pl.floor) return { tone: 'warn', t: 'Below a safe minimum', x: 'You logged ' + num(eaten) + ' kcal and the safe minimum is ' + num(pl.floor) + '. Eating this little tends to backfire with low energy, hunger and overeating later. If you logged everything, eat a bit more tomorrow.' };
+      if (def > 0.25 * pl.tdee) return { tone: 'warn', t: 'Deficit bigger than needed', x: 'About ' + num(def) + ' kcal under your burn (' + pct + '%). Big gaps cost muscle and energy. Aim nearer ' + num(Math.round(pt)) + '.' };
+      if (def >= 0.6 * pt && def <= 1.25 * pt) return { tone: 'ok', t: 'Right on plan', x: 'About ' + num(def) + ' kcal under your estimated burn. That pace is steady and sustainable.' };
+      if (def > 1.25 * pt) return { tone: 'info', t: 'Deeper than planned', x: 'About ' + num(def) + ' kcal under your burn. Fine now and then. Steady beats fast.' };
+      if (def >= 0) return { tone: 'info', t: 'Smaller deficit than planned', x: 'About ' + num(def) + ' kcal under your burn. Still moving the right way. The weekly average matters, not one day.' };
+      return { tone: 'info', t: 'Above your estimated burn', x: 'About ' + num(-def) + ' kcal over. One day barely moves your trend. Return to your target at the next meal.' };
+    }
+    if (pl.goal === 'gain') {
+      if (def <= -100 && def >= -500) return { tone: 'ok', t: 'Right on plan', x: 'About ' + num(-def) + ' kcal above your burn, a good range for gaining slowly.' };
+      return { tone: 'info', t: def > -100 ? 'Below your gaining range' : 'Above your gaining range', x: 'Aim for roughly 150 to 400 kcal above your burn.' };
+    }
+    if (Math.abs(def) <= 0.1 * pl.tdee) return { tone: 'ok', t: 'Balanced', x: 'Within about ' + num(Math.abs(def)) + ' kcal of your estimated burn.' };
+    return { tone: 'info', t: def > 0 ? 'Under your burn' : 'Over your burn', x: 'About ' + num(Math.abs(def)) + ' kcal ' + (def > 0 ? 'under' : 'over') + '. Fine for a day when you are maintaining.' };
+  }
+  function weeklyStats() {
+    var days = 0, sum = 0, low = 0;
+    for (var n = 1; n <= 7; n++) {
+      var d = addDays(today, -n), eaten = total(d, 'cal'), pl = plan(d);
+      if (!pl || eaten <= 0) continue;
+      days++; sum += pl.tdee - eaten;
+      if (eaten < pl.floor) low++;
+    }
+    return { days: days, avg: days ? Math.round(sum / days) : 0, low: low };
+  }
+  function weighTrend() {
+    var cut = addDays(today, -35), l = state.weights.filter(function (w) { return w.date >= cut; });
+    if (l.length < 2) return null;
+    var a = l[0], b = l[l.length - 1], span = (parse(b.date) - parse(a.date)) / 86400000;
+    return span < 7 ? null : (b.kg - a.kg) / (span / 7);
+  }
+  var profOpened = false;
+  function renderBalance() {
+    var body = $('#balBody'), meta = $('#balMeta'), p = state.profile, pl = plan(sel), h = '';
+    if (!p) {
+      meta.textContent = '';
+      if (!profOpened) { $('#profDet').open = true; profOpened = true; }
+      body.innerHTML = '<p class="small2">Fill in your profile below. The app will estimate what you burn each day, including your walking and dancing, and tell you how much to eat.</p>';
+      return;
+    }
+    if (!pl) {
+      meta.textContent = '';
+      body.innerHTML = '<p class="small2">Add your weight in the Weight card first. The calorie estimate needs it.</p>';
+      return;
+    }
+    var eaten = total(sel, 'cal'), rem = pl.target - eaten;
+    meta.textContent = pl.goal === 'lose' ? 'Goal: lose about ' + dW(-pl.planned * 7 / 7700).replace('−', '') + ' a week' : pl.goal === 'gain' ? 'Goal: gain slowly' : 'Goal: maintain';
+    var why = pl.ex > 0
+      ? 'Base ' + num(pl.t0) + ' plus ' + (pl.ef === 1 ? 'all' : 'half') + ' of your ' + num(pl.ex) + ' kcal of exercise.'
+      : 'Base ' + num(pl.t0) + '. It rises when you log walking or dancing.';
+    h += '<div class="num"><strong>' + num(pl.target) + ' <small>kcal to eat ' + (sel === today ? 'today' : 'this day') + '</small></strong><span>' + why + '</span></div>';
+    h += '<dl class="kv">' +
+      '<dt>Resting (your body at rest)</dt><dd>' + num(pl.bmr) + '</dd>' +
+      '<dt>Daily life, outside workouts</dt><dd>' + num(pl.base - pl.bmr) + '</dd>' +
+      '<dt>Logged exercise</dt><dd>' + num(pl.ex) + '</dd>' +
+      '<dt class="tot">Estimated burn</dt><dd class="tot">' + num(pl.tdee) + '</dd>' +
+      '<dt>Eaten</dt><dd>' + num(eaten) + '</dd>' +
+      '<dt>' + (rem >= 0 ? 'Left to eat' : 'Over target') + '</dt><dd>' + num(Math.abs(rem)) + '</dd></dl>';
+    var v = null;
+    if (eaten > 0 && sel < today) v = dayVerdict(pl, eaten);
+    if (v) {
+      h += '<div class="verdict"><strong><i class="dot" style="background:' + TONE[v.tone] + '"></i>' + esc(v.t) + '</strong><p>' + esc(v.x) + '</p></div>';
+    } else if (sel < today) {
+      h += '<p class="small2">No food logged this day, so there is no balance to judge.</p>';
+    } else if (eaten === 0) {
+      h += '<p class="small2">Log your food and you will see how the day balances against your burn.</p>';
+    } else if (rem < -pl.target * 0.05) {
+      h += '<p class="small2">A little over today is normal. Your weekly average matters far more than one day.</p>';
+    }
+    var ws = weeklyStats(), wt = weighTrend(), u = [];
+    if (ws.days >= 3) {
+      u.push('Last 7 days, ' + ws.days + ' days logged: average ' + (ws.avg >= 0 ? num(ws.avg) + ' kcal under' : num(-ws.avg) + ' kcal over') + ' your estimated burn, about ' + dW(-ws.avg * 7 / 7700) + ' a week by the numbers.');
+    } else u.push('Log at least 3 days to see your weekly average.');
+    if (wt !== null) u.push('Your weigh-ins show ' + dW(wt) + ' a week. Body weight swings a kilo or two from water, so judge it over weeks. The weigh-ins are the real measure.');
+    if (ws.low >= 3) u.push('You have eaten below the safe minimum on ' + ws.low + ' of the last 7 days. If eating enough feels hard, a doctor or dietitian can help.');
+    if (pl.note === 'under18') u.push('Because you are under 18, this shows maintenance only. Growing bodies need fuel, and a doctor can advise on weight.');
+    if (pl.note === 'lowbmi') u.push('Your BMI is under 18.5, so a weight-loss target is not recommended. This is set to maintenance.');
+    if (pl.goal === 'lose') u.push('Only half of your exercise calories are added back. Activity estimates run high, so this keeps the deficit real without pushing it too far.');
+    h += '<ul class="small2" style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px">' + u.map(function (s) { return '<li>' + esc(s) + '</li>'; }).join('') + '</ul>';
+    body.innerHTML = h;
+  }
+
   function renderMission() {
     var m = metOf(sel), n = (m.cal ? 1 : 0) + (m.water ? 1 : 0) + (m.move ? 1 : 0), done = n === 3, left = [];
     if (!m.cal) left.push(calOver(sel) ? 'calories (over)' : 'calories');
@@ -853,7 +1072,7 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     $('#dayDate').textContent = parse(sel).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
     $('#next').disabled = sel >= today;
 
-    $('#calGoal').innerHTML = 'Goal ' + num(g.cal) + ' kcal' + (g.cal !== state.goals.cal ? ' (adjusted)' : '') + badge(m.cal, 'var(--cal)', 'On target');
+    $('#calGoal').innerHTML = 'Goal ' + num(g.cal) + ' kcal' + (autoPlan(sel) ? ' (calculated)' : g.cal !== state.goals.cal ? ' (adjusted)' : '') + badge(m.cal, 'var(--cal)', 'On target');
     $('#calRing').innerHTML = ring(cal / g.cal, COLORS.cal, 'Calories: ' + Math.round(cal / g.cal * 100) + ' percent of goal');
     $('#calNum').innerHTML = num(cal) + ' <small>kcal</small>';
     var left = g.cal - cal;
@@ -876,7 +1095,7 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     $('#log').innerHTML = list.length ? list.map(function (e) {
       var what = e.k === 'cal' ? num(e.v) + ' kcal' + (e.note ? ' &middot; ' + esc(e.note) : '')
         : e.k === 'water' ? '1 glass of water'
-        : e.v + ' min' + (e.note ? ' &middot; ' + esc(e.note) : '');
+        : moveLabel(e);
       var t = new Date(e.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       return '<li><i class="dot" style="background:' + COLORS[e.k] + '"></i><span class="what">' + what + '</span>' +
         '<span class="when">' + esc(t) + '</span><button class="x" type="button" data-del="' + esc(e.id) + '" aria-label="Remove this entry">Remove</button></li>';
@@ -899,13 +1118,15 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     renderAdv();
     renderWeight();
     renderRecent();
+    renderBalance();
+    updateActHint();
   }
 
   /* ---- events ---- */
   document.addEventListener('click', function (e) {
     var t = e.target.closest('button');
     if (!t) return;
-    if (t.dataset.add) add(t.dataset.add, t.dataset.v, t.dataset.note);
+    if (t.dataset.add) add(t.dataset.add, t.dataset.v, t.dataset.note || '', t.dataset.a ? { a: t.dataset.a, l: t.dataset.l || 'm' } : null);
     else if (t.dataset.del) removeEntry(t.dataset.del);
     else if (t.dataset.date) { sel = t.dataset.date; render(); }
     else if (t.dataset.plan) { if (t.dataset.plan === 'undo') undoPlan(); else applyPlan(t.dataset.plan); }
@@ -925,8 +1146,22 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
   });
   $('#moveForm').addEventListener('submit', function (e) {
     e.preventDefault();
-    add('move', $('#moveIn').value, $('#moveKind').value);
+    add('move', $('#moveIn').value, '', { a: $('#actType').value, l: $('#actLvl').value });
     $('#moveIn').value = '';
+  });
+  ['input', 'change'].forEach(function (ev) {
+    $('#moveIn').addEventListener(ev, updateActHint);
+    $('#actType').addEventListener(ev, updateActHint);
+    $('#actLvl').addEventListener(ev, updateActHint);
+  });
+  $('#pfGoal').addEventListener('change', function () { $('#pfPaceWrap').hidden = this.value !== 'lose'; });
+  $('#profForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var age = Math.round(Number($('#pfAge').value)), h = Math.round(Number($('#pfH').value));
+    if (!(age >= 10 && age <= 90 && h >= 100 && h <= 230)) return;
+    state.profile = { sex: $('#pfSex').value === 'm' ? 'm' : 'f', age: age, h: h, life: Number($('#pfLife').value) || 1.2,
+      goal: $('#pfGoal').value, pace: Number($('#pfPace').value) || 0.5, auto: $('#pfAuto').checked };
+    saveLocal(); pushMeta(); render(); toast('Profile saved');
   });
   $('#goalsBtn').addEventListener('click', function () {
     var p = $('#goalsPanel'), open = p.hidden;
@@ -934,6 +1169,7 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     this.setAttribute('aria-expanded', String(open));
     if (open) {
       $('#gCal').value = state.goals.cal; $('#gWater').value = state.goals.water; $('#gMove').value = state.goals.move;
+      $('#gCal').disabled = !!autoPlan(sel); $('#gCalHint').hidden = !autoPlan(sel);
     }
   });
   $('#goalsForm').addEventListener('submit', function (e) {
@@ -1004,6 +1240,7 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     saveLocal(); pushMeta(); render(); toast(state.targetKg ? 'Target saved' : 'Target cleared');
   });
 
+  fillProfile();
   setSoundBtn();
   setNote(false);
   render();
@@ -1031,6 +1268,7 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
             if (typeof v.targetKg === 'number' || v.targetKg === null) state.targetKg = v.targetKg;
             if (Array.isArray(v.customFoods)) state.customFoods = v.customFoods;
             if (Array.isArray(v.recent)) state.recent = v.recent;
+            if (v.profile && typeof v.profile === 'object') { state.profile = v.profile; fillProfile(); }
           }
           else if (d.id.indexOf('d-') === 0 && v.date) { remoteDays[v.date] = true; state.days[v.date] = Array.isArray(v.entries) ? v.entries : []; }
         });
@@ -1040,7 +1278,7 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
           Object.keys(state.days).forEach(function (date) { if (!remoteDays[date] && state.days[date].length) pushDay(date); });
           var gl = state.goals;
           if (!hasGoals && (gl.cal !== DEFAULT_GOALS.cal || gl.water !== DEFAULT_GOALS.water || gl.move !== DEFAULT_GOALS.move)) pushGoals();
-          if (!hasMeta && (Object.keys(state.adj).length || Object.keys(state.plans).length || state.bank || Object.keys(state.banked).length || state.weights.length || state.customFoods.length)) pushMeta();
+          if (!hasMeta && (Object.keys(state.adj).length || Object.keys(state.plans).length || state.bank || Object.keys(state.banked).length || state.weights.length || state.customFoods.length || state.profile)) pushMeta();
         }
         saveLocal(); setNote(true); render();
       }, function () { col = null; setNote(false); });
