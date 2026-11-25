@@ -25,6 +25,7 @@
   --cal: #d9730d;
   --water: #1c7ed6;
   --move: #2f9e6b;
+  --pro: #7a3fc4;
   --danger: #b42318;
   --focus: #14202b;
   --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
@@ -33,13 +34,13 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #0f161d; --surface: #17212b; --fg: #e8eef3; --muted: #93a1ae; --line: #263441;
-    --track: #243240; --cal: #f09a3e; --water: #4aa3f0; --move: #4cc38a; --danger: #f97066; --focus: #e8eef3;
+    --track: #243240; --cal: #f09a3e; --water: #4aa3f0; --move: #4cc38a; --pro: #b794f4; --danger: #f97066; --focus: #e8eef3;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #0f161d; --surface: #17212b; --fg: #e8eef3; --muted: #93a1ae; --line: #263441;
-  --track: #243240; --cal: #f09a3e; --water: #4aa3f0; --move: #4cc38a; --danger: #f97066; --focus: #e8eef3;
+  --track: #243240; --cal: #f09a3e; --water: #4aa3f0; --move: #4cc38a; --pro: #b794f4; --danger: #f97066; --focus: #e8eef3;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -145,6 +146,11 @@ button { cursor: pointer; }
 .small2 { font-size: 12px; color: var(--muted); margin: 0; }
 .pbar { height: 10px; border-radius: 5px; background: var(--track); overflow: hidden; }
 .pbar i { display: block; height: 100%; background: var(--move); border-radius: 5px; }
+.pbar.pro i { background: var(--pro); }
+.tag { display: inline-block; font-size: 11px; font-weight: 600; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; margin-right: 4px; vertical-align: 1px; }
+.pro { display: flex; flex-direction: column; gap: 8px; }
+.pro .badge { margin-left: 0; }
+.ideas { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
 #goalPath { display: flex; flex-direction: column; gap: 8px; }
 .fold { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
 .fold > summary { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 14px 16px; cursor: pointer; list-style: none; }
@@ -254,6 +260,7 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
       <div id="calRing"></div>
       <div class="num"><strong id="calNum"></strong><span id="calSub"></span></div>
     </div>
+    <div class="pro" id="proBox"></div>
     <div class="food">
       <div class="row"><input class="grow" id="foodQ" type="search" autocomplete="off" placeholder="Search food: rice, ful, apple..." aria-label="Search food"></div>
       <div class="foodres" id="foodRes"></div>
@@ -269,13 +276,13 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
           <button class="btn ghost" id="pickCancel" type="button">Cancel</button>
         </div>
       </div>
-      <div class="chips" id="recent"></div>
-      <p class="small2">Calories are typical averages and can differ by recipe and portion.</p>
+      <p class="small2">Search over 490 foods and drinks. Foods you have eaten before show up at the top of the results. Calories are typical averages and can differ by recipe and portion.</p>
       <details class="more">
         <summary>Save my own food</summary>
         <form class="row" id="myFoodForm">
           <input class="grow" id="myFoodName" type="text" maxlength="40" placeholder="Name" aria-label="Food name" required>
           <input class="small" id="myFoodKcal" type="number" inputmode="numeric" min="1" max="5000" placeholder="kcal per serving" aria-label="Calories per serving" required>
+          <input class="small" id="myFoodPro" type="number" inputmode="decimal" min="0" max="500" placeholder="protein g per serving" aria-label="Protein per serving in grams">
           <button class="btn ghost" type="submit">Save</button>
         </form>
       </details>
@@ -287,6 +294,7 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     </div>
     <form class="row" id="calForm">
       <input class="small" id="calIn" type="number" inputmode="numeric" min="1" max="10000" placeholder="kcal" aria-label="Calories to add" required>
+      <input class="small" id="calPro" type="number" inputmode="decimal" min="0" max="500" placeholder="protein g" aria-label="Protein in grams (optional)">
       <input class="grow" id="calNote" type="text" maxlength="60" placeholder="What was it? (optional)" aria-label="Meal note">
       <button class="btn cal" type="submit">Add</button>
     </form>
@@ -492,7 +500,10 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     var before = flags(sel);
     var list = (state.days[sel] = (state.days[sel] || []).slice());
     var entry = { id: Math.random().toString(36).slice(2, 10), k: k, v: v, note: note || '', t: Date.now() };
-    if (extra) { entry.a = extra.a; entry.l = extra.l; }
+    if (extra) {
+      if (extra.a) { entry.a = extra.a; entry.l = extra.l; }
+      if (extra.pr > 0) entry.pr = Math.round(Math.min(extra.pr, 500) * 10) / 10;
+    }
     list.push(entry);
     saveLocal(); pushDay(sel); render();
     celebrate(before, flags(sel));
@@ -803,53 +814,470 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
 
   /* ---- food list: [name, kcal per 100 g, serving in g, serving name]. Typical averages, built in, works offline. ---- */
   var FOODS = [
-    ['Aish baladi (flatbread loaf)', 270, 90, 'loaf'], ['Pita bread', 275, 60, 'pita'], ['White bread', 265, 30, 'slice'],
-    ['Brown bread', 250, 30, 'slice'], ['Toast', 290, 25, 'slice'], ['Feteer meshaltet', 420, 120, 'piece'],
-    ['White rice, cooked', 130, 160, 'cup'], ['Brown rice, cooked', 123, 160, 'cup'], ['Pasta, cooked', 158, 140, 'cup'],
-    ['Koshari', 160, 350, 'plate'], ['Bulgur, cooked', 83, 150, 'cup'], ['Oats, dry', 389, 40, 'bowl'],
-    ['Cornflakes', 357, 30, 'bowl'], ['Potato, boiled', 87, 150, 'medium'], ['French fries', 312, 120, 'portion'],
-    ['Sweet potato, baked', 90, 150, 'medium'], ['Ful medames', 110, 200, 'plate'], ['Taameya (falafel)', 330, 25, 'piece'],
-    ['Lentils, cooked', 116, 200, 'cup'], ['Chickpeas, cooked', 164, 150, 'cup'], ['White beans, cooked', 140, 150, 'cup'],
-    ['Hummus', 166, 30, '2 tbsp'], ['Tahini', 595, 15, 'tbsp'], ['Molokhia (soup)', 50, 200, 'bowl'],
-    ['Mahshi (stuffed vine leaves)', 150, 30, 'piece'], ['Mixed salad', 20, 150, 'bowl'], ['Tomato', 18, 120, 'medium'],
-    ['Cucumber', 15, 100, 'medium'], ['Carrot', 41, 60, 'medium'], ['Avocado', 160, 100, 'half'],
-    ['Egg, boiled', 155, 50, 'egg'], ['Egg, fried', 196, 46, 'egg'], ['Omelette', 154, 100, 'portion'],
-    ['Chicken breast, grilled', 165, 120, 'breast'], ['Chicken thigh, roasted', 209, 100, 'thigh'], ['Fried chicken', 246, 100, 'piece'],
-    ['Beef, cooked', 250, 100, 'portion'], ['Kofta, grilled', 250, 50, 'piece'], ['Lamb, cooked', 294, 100, 'portion'],
-    ['Liver, cooked', 175, 100, 'portion'], ['Turkey breast', 135, 100, 'portion'], ['Fish, grilled', 128, 150, 'fillet'],
-    ['Tuna, canned', 116, 100, 'can'], ['Shrimp, cooked', 99, 100, 'portion'], ['Shawarma sandwich', 230, 250, 'sandwich'],
-    ['Beef burger sandwich', 250, 220, 'burger'], ['Pizza', 266, 107, 'slice'], ['Milk, whole', 61, 240, 'cup'],
-    ['Milk, skim', 34, 240, 'cup'], ['Yogurt, plain', 61, 150, 'cup'], ['Greek yogurt', 97, 150, 'cup'],
-    ['Feta cheese', 264, 30, 'piece'], ['White cheese (Domiti)', 250, 30, 'piece'], ['Cheddar cheese', 403, 30, 'slice'],
-    ['Cottage cheese', 98, 100, 'portion'], ['Apple', 52, 180, 'medium'], ['Banana', 89, 120, 'medium'],
-    ['Orange', 47, 150, 'medium'], ['Mango', 60, 200, 'cup'], ['Grapes', 69, 100, 'handful'],
-    ['Watermelon', 30, 150, 'slice'], ['Strawberries', 32, 150, 'cup'], ['Guava', 68, 100, 'fruit'],
-    ['Dates', 282, 8, 'date'], ['Almonds', 579, 28, 'handful'], ['Peanuts', 567, 28, 'handful'],
-    ['Walnuts', 654, 28, 'handful'], ['Peanut butter', 588, 16, 'tbsp'], ['Olive oil', 884, 14, 'tbsp'],
-    ['Butter', 717, 14, 'tbsp'], ['Ghee', 900, 13, 'tbsp'], ['Sugar', 387, 4, 'tsp'],
-    ['Honey', 304, 21, 'tbsp'], ['Jam', 250, 20, 'tbsp'], ['Tea with 1 tsp sugar', 7, 240, 'cup'],
-    ['Cola', 42, 330, 'can'], ['Orange juice', 45, 250, 'glass'], ['Basbousa', 350, 70, 'piece'],
-    ['Kunafa', 380, 100, 'portion'], ['Baklava', 430, 40, 'piece'], ['Om Ali', 280, 150, 'bowl'],
-    ['Rice pudding', 130, 150, 'bowl'], ['Cake', 350, 80, 'slice'], ['Ice cream', 207, 70, 'scoop'],
-    ['Dark chocolate', 546, 20, 'piece'], ['Digestive biscuit', 480, 15, 'biscuit'], ['Potato chips', 536, 30, 'small bag']
+    ['Aish baladi (flatbread loaf)', 270, 90, 'loaf', 9], ['Pita bread', 275, 60, 'pita', 9], ['White bread', 265, 30, 'slice', 9],
+    ['Brown bread', 250, 30, 'slice', 10], ['Toast', 290, 25, 'slice', 9], ['Feteer meshaltet', 420, 120, 'piece', 8],
+    ['White rice, cooked', 130, 160, 'cup', 2.7], ['Brown rice, cooked', 123, 160, 'cup', 2.7], ['Pasta, cooked', 158, 140, 'cup', 5.8],
+    ['Koshari', 160, 350, 'plate', 5], ['Bulgur, cooked', 83, 150, 'cup', 3.1], ['Oats, dry', 389, 40, 'bowl', 13],
+    ['Cornflakes', 357, 30, 'bowl', 7], ['Potato, boiled', 87, 150, 'medium', 2], ['French fries', 312, 120, 'portion', 3.4],
+    ['Sweet potato, baked', 90, 150, 'medium', 2], ['Ful medames', 110, 200, 'plate', 7.6], ['Taameya (falafel)', 330, 25, 'piece', 13],
+    ['Lentils, cooked', 116, 200, 'cup', 9], ['Chickpeas, cooked', 164, 150, 'cup', 8.9], ['White beans, cooked', 140, 150, 'cup', 8.5],
+    ['Hummus', 166, 30, '2 tbsp', 8], ['Tahini', 595, 15, 'tbsp', 17], ['Molokhia (soup)', 50, 200, 'bowl', 3],
+    ['Mahshi (stuffed vine leaves)', 150, 30, 'piece', 3], ['Mixed salad', 20, 150, 'bowl', 1], ['Tomato', 18, 120, 'medium', 0.9],
+    ['Cucumber', 15, 100, 'medium', 0.7], ['Carrot', 41, 60, 'medium', 0.9], ['Avocado', 160, 100, 'half', 2],
+    ['Egg, boiled', 155, 50, 'egg', 12.6], ['Egg, fried', 196, 46, 'egg', 13.6], ['Omelette', 154, 100, 'portion', 10.5],
+    ['Chicken breast, grilled', 165, 120, 'breast', 31], ['Chicken thigh, roasted', 209, 100, 'thigh', 26], ['Fried chicken', 246, 100, 'piece', 24],
+    ['Beef, cooked', 250, 100, 'portion', 26], ['Kofta, grilled', 250, 50, 'piece', 20], ['Lamb, cooked', 294, 100, 'portion', 25],
+    ['Liver, cooked', 175, 100, 'portion', 27], ['Turkey breast', 135, 100, 'portion', 30], ['Fish, grilled', 128, 150, 'fillet', 26],
+    ['Tuna, canned', 116, 100, 'can', 26], ['Shrimp, cooked', 99, 100, 'portion', 24], ['Shawarma sandwich', 230, 250, 'sandwich', 14],
+    ['Beef burger sandwich', 250, 220, 'burger', 13], ['Pizza', 266, 107, 'slice', 11], ['Milk, whole', 61, 240, 'cup', 3.3],
+    ['Milk, skim', 34, 240, 'cup', 3.4], ['Yogurt, plain', 61, 150, 'cup', 3.5], ['Greek yogurt', 97, 150, 'cup', 9],
+    ['Feta cheese', 264, 30, 'piece', 14], ['White cheese (Domiti)', 250, 30, 'piece', 12], ['Cheddar cheese', 403, 30, 'slice', 25],
+    ['Cottage cheese', 98, 100, 'portion', 11], ['Apple', 52, 180, 'medium', 0.3], ['Banana', 89, 120, 'medium', 1.1],
+    ['Orange', 47, 150, 'medium', 0.9], ['Mango', 60, 200, 'cup', 0.8], ['Grapes', 69, 100, 'handful', 0.7],
+    ['Watermelon', 30, 150, 'slice', 0.6], ['Strawberries', 32, 150, 'cup', 0.7], ['Guava', 68, 100, 'fruit', 2.6],
+    ['Dates', 282, 8, 'date', 2.5], ['Almonds', 579, 28, 'handful', 21], ['Peanuts', 567, 28, 'handful', 26],
+    ['Walnuts', 654, 28, 'handful', 15], ['Peanut butter', 588, 16, 'tbsp', 25], ['Olive oil', 884, 14, 'tbsp', 0],
+    ['Butter', 717, 14, 'tbsp', 0.9], ['Ghee', 900, 13, 'tbsp', 0], ['Sugar', 387, 4, 'tsp', 0],
+    ['Honey', 304, 21, 'tbsp', 0.3], ['Jam', 250, 20, 'tbsp', 0.4], ['Tea with 1 tsp sugar', 7, 240, 'cup', 0],
+    ['Cola', 42, 330, 'can', 0], ['Orange juice', 45, 250, 'glass', 0.7], ['Basbousa', 350, 70, 'piece', 5],
+    ['Kunafa', 380, 100, 'portion', 6], ['Baklava', 430, 40, 'piece', 6], ['Om Ali', 280, 150, 'bowl', 6],
+    ['Rice pudding', 130, 150, 'bowl', 3.5], ['Cake', 350, 80, 'slice', 5], ['Ice cream', 207, 70, 'scoop', 3.5],
+    ['Dark chocolate', 546, 20, 'piece', 7], ['Digestive biscuit', 480, 15, 'biscuit', 7], ['Potato chips', 536, 30, 'small bag', 6.5]
   ];
+  // Extra library: name|kcal per 100 g (or ml)|serving size in g (or ml)|serving name|protein per 100 g|optional ml flag
+  var FOODS_EXTRA = `Baguette|270|60|piece|9
+Croissant|406|60|piece|8
+Bagel|257|100|bagel|10
+Naan bread|290|90|piece|9
+Tortilla wrap (flour)|310|45|wrap|8
+Corn tortilla|218|25|tortilla|5.7
+Whole wheat bread|250|30|slice|13
+Sourdough bread|260|50|slice|9
+Rye bread|259|32|slice|8.5
+Burger bun|270|50|bun|9
+Hot dog bun|280|45|bun|9
+Eish shamsi (sun bread)|250|100|loaf|8
+Crackers, salted|430|15|3 crackers|9
+Rice cakes|387|9|cake|8
+Granola|450|45|bowl|10
+Muesli|360|50|bowl|10
+Oatmeal cooked with milk|85|250|bowl|3.5
+Oatmeal cooked in water|71|240|bowl|2.5
+Pancake|227|40|pancake|6
+Waffle|291|75|waffle|8
+Couscous, cooked|112|160|cup|3.8
+Quinoa, cooked|120|185|cup|4.4
+Freekeh, cooked|120|150|cup|4.5
+Barley, cooked|123|157|cup|2.3
+Flour, white|364|30|3 tbsp|10
+Popcorn, air-popped|387|24|3 cups|13
+Popcorn, buttered|500|30|small bag|9
+Rice with vermicelli|150|160|cup|3
+Roz moammar (creamy baked rice)|180|250|portion|5.5
+Spaghetti with tomato sauce|130|250|plate|4.5
+Macarona bechamel|190|300|portion|9
+Egg noodles, cooked|138|160|cup|4.5
+Instant noodles, dry packet|450|75|packet|9
+Rice noodles, cooked|109|176|cup|0.9
+Lasagna|135|250|portion|7.5
+Mac and cheese|164|200|cup|7.5
+Fried rice|163|200|portion|4.7
+Fatta (rice, bread and meat)|190|350|plate|9
+Hawawshi|270|200|piece|13
+Sambousek, cheese|330|40|piece|9
+Sambousek, meat|300|45|piece|10
+Kebda iskandarani (liver)|160|120|portion|16
+Shakshuka|110|250|portion|7
+Falafel sandwich|230|200|sandwich|9
+Ful sandwich|200|180|sandwich|8
+Liver sandwich (kebda)|230|200|sandwich|13
+Sausage sandwich (sogok)|300|180|sandwich|12
+Baba ghanoush|130|60|portion|2.5
+Tabbouleh|120|150|bowl|2.5
+Fattoush|90|150|bowl|2
+Tahini salad|150|60|portion|4
+Kebab, grilled lamb|230|100|portion|22
+Shish tawook (chicken skewers)|170|120|portion|25
+Rotisserie chicken quarter|220|200|quarter|25
+Grilled chicken with skin|215|150|piece|26
+Mahshi cabbage (stuffed)|110|40|roll|4
+Mahshi kousa (stuffed zucchini)|105|50|piece|3.5
+Stuffed peppers|120|150|pepper|5
+Okra stew (bamia)|75|250|bowl|3.5
+Bamia with meat|90|250|bowl|6
+Green beans stew (fasolia)|80|250|bowl|3.5
+Peas and carrots stew|80|250|bowl|3.5
+Potato stew|90|250|bowl|2.5
+Eggplant moussaka|110|200|portion|3.5
+Tagine, meat with vegetables|120|300|portion|10
+Lentil soup|70|250|bowl|4.5
+Chicken soup|40|250|bowl|3.5
+Vegetable soup|35|250|bowl|1.2
+Tomato soup|45|250|bowl|1.2
+Cream of mushroom soup|65|250|bowl|1.8
+Orzo soup (lesan asfour)|70|250|bowl|2.5
+Stuffed pigeon (hamam mahshi)|220|200|pigeon|22
+Sayadeya (fish with rice)|170|350|plate|12
+Eggah (Egyptian omelette)|150|150|portion|9
+Egg and tomato|110|200|portion|8
+Basterma and eggs|250|150|portion|16
+Feteer with cheese|350|150|piece|10
+Fried eggplant|180|100|portion|1.5
+Qatayef (stuffed pancake)|290|60|piece|6
+Zalabya (fried dough balls)|380|50|3 balls|4
+Balah el sham|380|40|piece|4
+Mehalabeya (milk pudding)|120|150|bowl|3.5
+Gulab jamun|320|35|piece|4
+Halawa tahiniya (halva)|516|30|piece|12
+Ghorayeba (shortbread)|480|20|piece|6
+Maamoul (date cookie)|430|40|piece|5
+Kahk (eid cookie)|470|30|piece|6
+Turkish delight|360|20|piece|0.5
+Black beans, cooked|132|172|cup|8.9
+Kidney beans, cooked|127|177|cup|8.7
+Lima beans, cooked|115|170|cup|7.8
+Split peas, cooked|118|196|cup|8.3
+Green peas, cooked|81|80|portion|5.4
+Edamame|121|155|cup|11.9
+Tofu, firm|144|100|portion|17
+Tempeh|192|100|portion|20
+Soy milk, unsweetened|33|240|cup|2.9|ml
+Lupin beans (termis)|119|100|portion|16
+Lentils, dry (raw)|353|50|portion|25
+Chickpeas, dry (raw)|364|50|portion|19
+Fava beans, dry (raw)|341|50|portion|26
+Seitan|140|100|portion|25
+Lettuce|15|50|cup|1.4
+Spinach, raw|23|30|cup|2.9
+Spinach, cooked|23|180|cup|3
+Kale|35|67|cup|2.9
+Cabbage|25|90|cup|1.3
+Broccoli, cooked|35|156|cup|2.4
+Cauliflower|25|100|cup|1.9
+Zucchini|17|120|medium|1.2
+Eggplant|25|100|portion|1
+Green beans|31|110|cup|1.8
+Sweet corn, cooked|96|100|portion|3.4
+Onion|40|110|medium|1.1
+Garlic|149|3|clove|6.4
+Bell pepper|26|120|medium|1
+Hot chili pepper|40|15|piece|2
+Beetroot|43|100|portion|1.6
+Radish|16|50|portion|0.7
+Okra|33|100|cup|1.9
+Mushrooms|22|70|cup|3.1
+Pumpkin|26|100|portion|1
+Celery|14|40|stalk|0.7
+Leek|61|89|piece|1.5
+Turnip|28|100|portion|0.9
+Artichoke|47|120|medium|3.3
+Asparagus|20|90|portion|2.2
+Arugula (rocca)|25|20|cup|2.6
+Parsley|36|10|handful|3
+Coriander|23|10|handful|2.1
+Taro (kolkas), cooked|112|100|portion|1.5
+Sweet potato, boiled|76|130|medium|1.4
+Potato, baked|93|173|medium|2.5
+Potato, mashed|88|210|cup|1.9
+Potato wedges, baked|130|150|portion|2.5
+Roasted vegetables|80|200|portion|2
+Pickled cucumber|12|35|piece|0.5
+Pickled turnips (torshi)|20|40|portion|0.5
+Olives, green|145|30|8 olives|1
+Olives, black|115|30|8 olives|0.8
+Tomato paste|82|16|tbsp|4.3
+Pear|57|180|medium|0.4
+Peach|39|150|medium|0.9
+Plum|46|66|piece|0.7
+Apricot|48|35|piece|1.4
+Cherries|63|100|portion|1.1
+Pineapple|50|165|cup|0.5
+Kiwi|61|75|piece|1.1
+Pomegranate|83|100|portion|1.7
+Figs, fresh|74|50|piece|0.8
+Figs, dried|249|19|fig|3.3
+Raisins|299|30|handful|3.1
+Dried apricots|241|30|4 pieces|3.4
+Prunes|240|30|3 prunes|2.2
+Lemon|29|60|piece|1.1
+Grapefruit|42|120|half|0.8
+Tangerine|53|90|piece|0.8
+Cantaloupe|34|150|slice|0.8
+Blueberries|57|75|handful|0.7
+Raspberries|52|62|handful|1.2
+Blackberries|43|75|handful|1.4
+Papaya|43|140|cup|0.5
+Coconut, fresh|354|45|piece|3.3
+Coconut, dried|660|20|2 tbsp|6.9
+Passion fruit|97|18|fruit|2.2
+Prickly pear (teen shoky)|41|100|piece|0.7
+Mulberries|43|100|portion|1.4
+Fruit salad|50|150|bowl|0.6
+Chicken breast, raw|120|150|portion|23
+Chicken breast, fried (breaded)|270|120|piece|22
+Chicken wings, fried|290|30|wing|24
+Chicken drumstick, roasted|172|80|drumstick|27
+Chicken liver, cooked|167|100|portion|24
+Chicken nuggets|296|20|piece|15
+Chicken shawarma (meat only)|190|100|portion|24
+Beef steak (sirloin), grilled|244|150|steak|27
+Ground beef, lean, cooked|215|100|portion|26
+Ground beef, regular, cooked|254|100|portion|26
+Beef burger patty, cooked|250|113|patty|26
+Beef stew (meat and vegetables)|110|300|bowl|10
+Roast beef, sliced|150|50|2 slices|22
+Lamb chop, grilled|290|100|chop|25
+Veal cutlet, breaded and fried|240|120|piece|17
+Beef sausage (sogok)|300|50|piece|13
+Pastrami (basterma)|230|30|portion|25
+Turkey, roasted|189|100|portion|29
+Turkey deli slices|104|30|3 slices|17
+Chicken deli slices|110|30|3 slices|18
+Mortadella|311|30|3 slices|14
+Salami|336|30|3 slices|19
+Bacon, cooked|541|8|slice|37
+Hot dog sausage|290|45|sausage|11
+Ham|145|30|slice|21
+Goat meat, cooked|143|100|portion|27
+Rabbit, cooked|173|100|portion|33
+Duck, roasted|337|100|portion|19
+Salmon, grilled|208|150|fillet|22
+Sardines, canned|208|90|can|25
+Tuna in oil, canned|198|100|can|29
+Mackerel, grilled|305|120|fillet|26
+Sea bass, grilled|124|150|fillet|24
+Tilapia, grilled|128|150|fillet|26
+Cod, baked|105|150|fillet|23
+Mullet (bouri), grilled|150|150|fish|25
+Fried fish, battered|232|150|piece|17
+Shrimp, fried (breaded)|242|100|portion|18
+Calamari, fried|175|100|portion|15
+Crab meat|97|100|portion|19
+Lobster|89|100|portion|19
+Mussels|172|100|portion|24
+Octopus|164|100|portion|30
+Fish sticks|240|90|3 sticks|14
+Smoked salmon|117|50|portion|18
+Tuna steak, grilled|184|120|portion|30
+Egg, scrambled|149|100|portion|10
+Egg white|52|33|white|11
+Egg yolk|322|17|yolk|16
+Egg, poached|143|50|egg|12.5
+Quail eggs|158|9|egg|13
+Cheese omelette|200|120|portion|13
+Milk, 2%|50|240|cup|3.3|ml
+Milk, low fat 1%|42|240|cup|3.4|ml
+Chocolate milk|83|240|cup|3.4|ml
+Strawberry milk|78|240|cup|3.2|ml
+Condensed milk, sweetened|321|20|tbsp|7.9
+Evaporated milk|134|15|tbsp|6.8
+Powdered milk|496|25|scoop|26
+Cream, heavy|340|15|tbsp|2.8
+Cooking cream, light|195|15|tbsp|3
+Sour cream|193|30|2 tbsp|2.4
+Labneh|160|30|2 tbsp|6
+Yogurt, fruit low fat|99|150|cup|4
+Yogurt, strained 0% fat|59|170|cup|10
+Skyr|63|150|cup|11
+Kefir|55|240|cup|3.4|ml
+Ayran (laban drink)|40|240|glass|2|ml
+Mozzarella cheese|280|30|slice|22
+Parmesan cheese|431|10|tbsp|38
+Cream cheese|342|30|2 tbsp|6
+Processed cheese slice|330|20|slice|20
+Triangle cheese (Kiri, Puck)|250|18|triangle|9
+Roumi cheese|387|30|slice|26
+Halloumi cheese|321|30|slice|22
+Ricotta cheese|174|100|portion|11
+Mish (aged cheese)|290|20|spoon|14
+Brie cheese|334|30|piece|21
+Paneer|296|50|portion|18
+Cottage cheese, low fat|72|100|portion|12
+Margarine|717|14|tbsp|0.2
+Mayonnaise|680|14|tbsp|1
+Whipped cream|257|30|portion|2.1
+Cashews|553|28|handful|18
+Pistachios|562|28|handful|20
+Hazelnuts|628|28|handful|15
+Pecans|691|28|handful|9
+Macadamia nuts|718|28|handful|8
+Pine nuts|673|15|tbsp|14
+Sunflower seeds|584|28|handful|21
+Pumpkin seeds|559|28|handful|30
+Sesame seeds|573|9|tbsp|18
+Flaxseed|534|10|tbsp|18
+Chia seeds|486|12|tbsp|17
+Mixed nuts|607|28|handful|20
+Roasted chickpeas|364|30|handful|19
+Watermelon seeds (lib)|557|28|handful|28
+Almond butter|614|16|tbsp|21
+Chocolate hazelnut spread|539|15|tbsp|6
+Sunflower oil|884|14|tbsp|0
+Coconut oil|862|14|tbsp|0
+Mustard|66|5|tsp|4
+Soy sauce|53|15|tbsp|8
+Vinegar|18|15|tbsp|0
+Pasta tomato sauce|50|125|half cup|1.5
+Pesto|420|16|tbsp|5
+Ranch dressing|430|30|2 tbsp|1
+Vinaigrette dressing|300|15|tbsp|0.5
+Ketchup|101|17|tbsp|1
+Hot sauce (shatta)|20|5|tsp|1
+Garlic sauce (toum)|520|15|tbsp|1
+Maple syrup|260|20|tbsp|0
+Chocolate syrup|270|20|tbsp|1.5
+Date syrup (dibs)|290|20|tbsp|1
+Black molasses|290|20|tbsp|0
+Marmalade|250|20|tbsp|0.3
+Gravy|50|60|ladle|1
+BBQ sauce|170|17|tbsp|1
+Sweet chili sauce|230|15|tbsp|0.5
+Bechamel sauce|140|60|ladle|3.5
+Brown sugar|380|4|tsp|0
+Sugar cube|387|4|cube|0
+Icing sugar|389|10|tbsp|0
+Lemon juice|22|15|tbsp|0.4|ml
+Milk chocolate|535|20|piece|8
+White chocolate|539|20|piece|6
+Chocolate bar with nuts and caramel|488|50|bar|9
+Chocolate wafer bar (KitKat style)|518|42|bar|6.5
+Chocolate cream cookie (Oreo style)|480|11|cookie|4.5
+Cookie, chocolate chip|488|15|cookie|5
+Chocolate wafer|520|20|piece|5
+Tea biscuit|440|10|biscuit|7
+Cream sandwich biscuit|480|12|biscuit|5
+Filled croissant (chocolate)|420|70|piece|7
+Donut, glazed|421|60|donut|5
+Muffin|377|110|muffin|5.5
+Brownie|466|50|piece|5.6
+Cheesecake|321|110|slice|5.5
+Apple pie|237|125|slice|1.9
+Chocolate cake|371|100|slice|5
+Sponge cake, plain|297|60|slice|6
+Cupcake with frosting|390|50|cupcake|3.5
+Tiramisu|283|120|portion|4.5
+Chocolate pudding|130|125|cup|3
+Custard|122|120|cup|3.5
+Jelly (gelatin dessert)|62|120|cup|1.2
+Ice cream bar, chocolate coated|260|60|bar|3.5
+Ice pop|100|60|piece|0
+Frozen yogurt|159|100|scoop|4
+Sorbet|130|100|scoop|0.5
+Gummy candy|343|30|handful|6.9
+Hard candy|394|6|piece|0
+Marshmallow|318|7|piece|1.8
+Lollipop|390|10|piece|0
+Caramel candy|382|10|piece|4.6
+Cotton candy|390|30|portion|0
+Fudge|411|20|piece|2
+Granola bar|471|40|bar|6.5
+Crepe with chocolate|260|120|crepe|5
+Pancakes with syrup|250|150|portion|5
+French toast|229|65|slice|8
+Pretzels|380|30|handful|10
+Corn chips (nachos)|490|30|handful|7
+Cheese puffs|545|28|small bag|6
+Onion rings|411|85|portion|4.5
+Chicken burger|250|200|burger|13
+Cheeseburger|303|120|burger|15.5
+Double burger|260|230|burger|14
+Crispy chicken sandwich|265|200|sandwich|13
+Hot dog in bun|290|100|hot dog|10
+Pepperoni pizza|298|107|slice|13
+Garlic bread|350|40|slice|8
+Burrito|206|220|burrito|8.6
+Taco|226|100|taco|9
+Quesadilla|290|150|portion|12
+Sushi roll (maki)|140|30|piece|3.5
+Salmon nigiri|150|35|piece|6
+Spring roll, fried|230|40|roll|5
+Samosa|262|50|piece|5
+Creamy pasta (Alfredo)|180|300|portion|7
+Chicken curry with rice|140|350|plate|8
+Chinese chicken noodles|140|300|portion|8
+Grilled cheese sandwich|330|120|sandwich|12
+Egg sandwich|240|150|sandwich|11
+Tuna sandwich|230|160|sandwich|12
+Cheese and tomato sandwich|230|130|sandwich|9
+Peanut butter sandwich|300|90|sandwich|11
+Cornflakes with milk|100|250|bowl|3.8
+Yogurt with honey and nuts|140|200|bowl|6
+Avocado toast|210|100|slice|5.5
+Protein bar|360|60|bar|33
+Whey protein powder|400|30|scoop|80
+Whey protein shake (1 scoop in water)|40|300|shake|8|ml
+Beef jerky|410|30|portion|33
+Coffee, black|2|240|cup|0.3|ml
+Espresso|9|30|shot|0.1|ml
+Coffee with milk and 1 tsp sugar|35|240|cup|1.4|ml
+Latte|54|350|medium|3|ml
+Cappuccino|42|240|cup|2.5|ml
+Mocha|75|350|medium|2.6|ml
+Iced coffee, sweetened|50|300|cup|1|ml
+Turkish coffee with sugar|45|60|cup|0.5|ml
+Tea with milk and sugar|35|240|cup|1|ml
+Mint tea with 2 tsp sugar|30|240|cup|0|ml
+Karkadeh (hibiscus), sweetened|35|240|glass|0|ml
+Tamarind drink|45|240|glass|0.2|ml
+Sugarcane juice|65|300|glass|0.3|ml
+Sobia (coconut milk drink)|90|250|glass|1.5|ml
+Sahlab|110|240|cup|3|ml
+Apple juice|46|240|cup|0.1|ml
+Mango juice, packaged|55|250|glass|0.3|ml
+Guava juice, packaged|52|250|glass|0.4|ml
+Pomegranate juice|54|240|cup|0.2|ml
+Grape juice|60|240|cup|0.4|ml
+Lemonade, sweetened|40|250|glass|0.1|ml
+Mint lemonade|35|250|glass|0.1|ml
+Strawberry juice, fresh|45|250|glass|0.6|ml
+Banana milkshake|90|300|glass|3|ml
+Chocolate milkshake|110|350|glass|3.5|ml
+Fruit smoothie|60|300|glass|1|ml
+Orange soda|45|330|can|0|ml
+Lemon-lime soda|40|330|can|0|ml
+Energy drink|45|250|can|0.3|ml
+Sports drink|26|500|bottle|0|ml
+Malt beverage (non-alcoholic)|37|330|bottle|0.4|ml
+Beer|43|330|bottle|0.5|ml
+Wine, red|85|150|glass|0.1|ml
+Wine, white|82|150|glass|0.1|ml
+Spirits (whisky, vodka)|231|30|shot|0|ml
+Coconut water|19|250|glass|0.7|ml
+Hot chocolate with milk|83|240|cup|3.5|ml
+Karak tea|60|240|cup|2.5|ml
+Yogurt drink, sweet|65|250|bottle|2.5|ml
+Oat milk|48|240|cup|1|ml
+Almond milk, unsweetened|15|240|cup|0.6|ml
+Rice milk|47|240|cup|0.3|ml
+Lassi, sweet|80|250|glass|3|ml`;
+  FOODS_EXTRA.split('\n').forEach(function (l) {
+    var a = l.split('|');
+    if (a.length >= 5) FOODS.push([a[0], Number(a[1]), Number(a[2]), a[3], Number(a[4]), a[5] || '']);
+  });
   var lastRes = [], pick = null;
   function foodList() {
-    var l = state.customFoods.map(function (c) { return { n: c.n, p: c.k, g: 100, s: 'serving', c: true }; });
-    FOODS.forEach(function (f) { l.push({ n: f[0], p: f[1], g: f[2], s: f[3], c: false }); });
+    var l = state.customFoods.map(function (c) { return { n: c.n, p: c.k, g: 100, s: 'serving', c: true, pr: typeof c.pr === 'number' ? c.pr : null }; });
+    FOODS.forEach(function (f) { l.push({ n: f[0], p: f[1], g: f[2], s: f[3], c: false, pr: f[4], u: f[5] === 'ml' ? 'ml' : 'g' }); });
     return l;
   }
+  // Search shows your recent foods first (only when they match), then your own foods, then the library.
   function searchFoods(q) {
     var w = q.toLowerCase().split(/\s+/).filter(Boolean);
     if (!w.length) return [];
-    return foodList().filter(function (f) {
-      var n = f.n.toLowerCase();
-      return w.every(function (x) { return n.indexOf(x) >= 0; });
-    }).slice(0, 6);
+    function hit(n) { n = n.toLowerCase(); return w.every(function (x) { return n.indexOf(x) >= 0; }); }
+    var rec = state.recent.filter(function (r) { return hit(r.n); }).slice(0, 3).map(function (r) { return { r: true, n: r.n, k: r.k, pr: r.pr }; });
+    function score(f) { return (f.c ? 0 : 10) + (f.n.toLowerCase().indexOf(w[0]) === 0 ? 0 : 5); }
+    var foods = foodList().filter(function (f) { return hit(f.n); }).sort(function (a, b) { return score(a) - score(b) || a.n.localeCompare(b.n); });
+    return rec.concat(foods.slice(0, 8));
   }
   function foodKcal(f, qty, unit) {
     if (f.c) return qty * f.p;
     return unit === 'g' ? qty * f.p / 100 : qty * f.g * f.p / 100;
+  }
+  function foodPro(f, qty, unit) {
+    if (f.pr == null) return null;
+    if (f.c) return qty * f.pr;
+    return unit === 'g' ? qty * f.pr / 100 : qty * f.g * f.pr / 100;
   }
   function renderFoodRes() {
     var q = $('#foodQ').value.trim();
@@ -857,22 +1285,38 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     var h = '';
     if (q && !lastRes.length) h = '<p class="small2">No match. Save it under "Save my own food", or type the calories yourself below.</p>';
     else h = lastRes.map(function (f, i) {
+      if (f.r) return '<button class="fr" type="button" data-food="' + i + '"><span class="fn"><span class="tag">Recent</span> ' + esc(f.n) + '</span><span class="fk">' + f.k + ' kcal' + (f.pr > 0 ? ' · ' + Math.round(f.pr) + ' g protein' : '') + '</span></button>';
       var k = f.c ? f.p : Math.round(f.g * f.p / 100);
-      return '<button class="fr" type="button" data-food="' + i + '"><span class="fn">' + esc(f.n) + '</span><span class="fk">' + k + ' kcal / ' + esc(f.s) + '</span></button>';
+      var pg = f.pr == null ? '' : ' · ' + Math.round(f.c ? f.pr : f.g * f.pr / 100) + ' g protein';
+      return '<button class="fr" type="button" data-food="' + i + '"><span class="fn">' + esc(f.n) + '</span><span class="fk">' + k + ' kcal' + pg + ' / ' + esc(f.s) + '</span></button>';
     }).join('');
     $('#foodRes').innerHTML = h;
   }
+  var pickPro = null;
   function updatePick() {
     if (!pick) return 0;
-    var k = Math.round(foodKcal(pick, Number($('#pickQty').value) || 0, $('#pickUnit').value));
-    $('#pickKcal').textContent = '≈ ' + num(k) + ' kcal';
+    var qty = Number($('#pickQty').value) || 0, unit = $('#pickUnit').value;
+    var k = Math.round(foodKcal(pick, qty, unit)), pr = foodPro(pick, qty, unit);
+    pickPro = pr == null ? null : Math.round(pr * 10) / 10;
+    $('#pickKcal').textContent = '≈ ' + num(k) + ' kcal' + (pr == null ? '' : ' · ' + Math.round(pr) + ' g protein');
     return k;
   }
   function openPick(i) {
-    pick = lastRes[i];
-    if (!pick) return;
+    var item = lastRes[i];
+    if (!item) return;
+    if (item.r) {
+      // A recent food: one tap logs it again with the same amount.
+      pick = null;
+      remember(item.n, item.k, item.pr);
+      $('#foodQ').value = ''; $('#foodRes').innerHTML = '';
+      add('cal', item.k, item.n, { pr: item.pr });
+      toast('Added ' + item.n);
+      return;
+    }
+    pick = item;
+    var ml = pick.u === 'ml';
     $('#pickName').textContent = pick.n;
-    $('#pickUnit').innerHTML = '<option value="s">' + esc(pick.s) + (pick.c ? '' : ' (' + pick.g + ' g)') + '</option>' + (pick.c ? '' : '<option value="g">grams</option>');
+    $('#pickUnit').innerHTML = '<option value="s">' + esc(pick.s) + (pick.c ? '' : ' (' + pick.g + (ml ? ' ml' : ' g') + ')') + '</option>' + (pick.c ? '' : '<option value="g">' + (ml ? 'ml' : 'grams') + '</option>');
     $('#pickQty').value = 1;
     $('#foodRes').innerHTML = '';
     $('#foodPick').hidden = false;
@@ -880,8 +1324,8 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     $('#pickQty').focus();
   }
   function closePick() { pick = null; $('#foodPick').hidden = true; }
-  function remember(note, k) {
-    state.recent = [{ n: note, k: k }].concat(state.recent.filter(function (r) { return r.n !== note; })).slice(0, 6);
+  function remember(note, k, pr) {
+    state.recent = [{ n: note, k: k, pr: pr || 0 }].concat(state.recent.filter(function (r) { return r.n !== note; })).slice(0, 40);
     saveLocal(); pushMeta();
   }
   function addPick() {
@@ -889,22 +1333,18 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     var qty = Number($('#pickQty').value), k = updatePick();
     if (!(qty > 0) || !(k > 0)) return;
     var unit = $('#pickUnit').value;
-    var note = (pick.n + ' × ' + qty + (unit === 'g' ? ' g' : ' ' + pick.s)).slice(0, 60);
+    var note = (pick.n + ' × ' + qty + (unit === 'g' ? (pick.u === 'ml' ? ' ml' : ' g') : ' ' + pick.s)).slice(0, 60);
     closePick();
     $('#foodQ').value = ''; $('#foodRes').innerHTML = '';
-    remember(note, k);
-    add('cal', k, note);
+    var pr = pickPro;
+    remember(note, k, pr);
+    add('cal', k, note, { pr: pr });
   }
   function addRecent(i) {
     var r = state.recent[i];
-    if (r) { remember(r.n, r.k); add('cal', r.k, r.n); }
+    if (r) { remember(r.n, r.k, r.pr); add('cal', r.k, r.n, { pr: r.pr }); }
   }
-  function renderRecent() {
-    var el = $('#recent');
-    el.innerHTML = state.recent.length ? '<span class="small2" style="align-self:center">Recent:</span>' + state.recent.map(function (r, i) {
-      return '<button class="chip" type="button" data-recent="' + i + '">' + esc(r.n) + ' · ' + r.k + '</button>';
-    }).join('') : '';
-  }
+  function renderRecent() { /* recent foods now live inside the search results */ }
 
   function moveLabel(e) {
     var act = actOf(e);
@@ -956,15 +1396,61 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     if (Math.abs(def) <= 0.1 * pl.tdee) return { tone: 'ok', t: 'Balanced', x: 'Within about ' + num(Math.abs(def)) + ' kcal of your estimated burn.' };
     return { tone: 'info', t: def > 0 ? 'Under your burn' : 'Over your burn', x: 'About ' + num(Math.abs(def)) + ' kcal ' + (def > 0 ? 'under' : 'over') + '. Fine for a day when you are maintaining.' };
   }
+  /* ---- protein: target from adjusted body weight, goal and activity; totals from logged foods ---- */
+  function proTotal(date) { return entriesOf(date).reduce(function (s, e) { return e.k === 'cal' && e.pr > 0 ? s + e.pr : s; }, 0); }
+  function proMissing(date) { return entriesOf(date).filter(function (e) { return e.k === 'cal' && !(e.pr > 0); }).length; }
+  function proPlan(date) {
+    var pl = plan(date), p = state.profile;
+    if (!pl) return null;
+    // Devine ideal weight. For a high weight use adjusted weight (ideal + 25% of the excess), otherwise actual weight.
+    var ibw = (p.sex === 'm' ? 50 : 45.5) + 0.906 * Math.max(0, p.h - 152.4);
+    var ref = pl.kg > 1.2 * ibw ? ibw + 0.25 * (pl.kg - ibw) : pl.kg;
+    var gpk = pl.goal === 'lose' ? 1.5 : pl.goal === 'gain' ? 1.6 : 1.2; // g per kg: higher in a deficit to protect muscle
+    if (pl.ex >= 400) gpk += 0.2; else if (pl.ex >= 150) gpk += 0.1;     // more on active days
+    var g = Math.min(ref * gpk, 0.35 * pl.target / 4);                    // never more than about 35% of calories
+    return { g: Math.max(20, Math.round(g / 5) * 5), ref: Math.round(ref), gpk: gpk, pct: Math.round(g * 4 / pl.target * 100) };
+  }
+  function proIdeas(kcalLeft) {
+    var c = foodList().filter(function (f) { return !f.c && f.pr != null; }).map(function (f) {
+      return { n: f.n, s: f.s, k: Math.round(f.g * f.p / 100), pr: Math.round(f.g * f.pr / 100) };
+    }).filter(function (f) { return f.pr >= 10 && f.pr / f.k >= 0.1; }).sort(function (a, b) { return b.pr / b.k - a.pr / a.k; }).slice(0, 8);
+    var off = parse(sel).getDate() % (c.length || 1), out = [];
+    for (var i = 0; i < c.length && out.length < 3; i++) {
+      var f = c[(off + i) % c.length];
+      if (f.k <= kcalLeft) out.push(f);
+    }
+    return out;
+  }
+  function renderPro() {
+    var el = $('#proBox'), pp = proPlan(sel);
+    if (!pp) { el.innerHTML = '<p class="small2">Save your profile and weight under Energy balance to see your daily protein target.</p>'; return; }
+    var got = Math.round(proTotal(sel)), left = pp.g - got, miss = proMissing(sel), frac = Math.min(1, got / pp.g);
+    var done = got >= 0.9 * pp.g;
+    var h = '<div class="card-head"><h2 style="font-size:15px">Protein</h2><span class="muted">Goal ' + pp.g + ' g' +
+      (done ? '<span class="badge" style="--c:var(--pro)">' + CHECK + 'On target</span>' : '') + '</span></div>' +
+      '<div class="pbar pro" role="img" aria-label="Protein: ' + got + ' of ' + pp.g + ' grams"><i style="width:' + (frac * 100).toFixed(0) + '%"></i></div>' +
+      '<p class="small2"><strong>' + got + ' g</strong> of ' + pp.g + ' g' + (left > 0 ? ' &middot; ' + left + ' g to go' : got > 1.5 * pp.g ? ' &middot; more than enough, extra adds little' : '') + '</p>';
+    if (miss > 0 && total(sel, 'cal') > 0) h += '<p class="small2">' + miss + (miss === 1 ? ' entry has' : ' entries have') + ' no protein recorded, so this total may be low. Pick foods from the search to get it automatically.</p>';
+    if (sel === today && left >= 15) {
+      var kl = goalFor(sel, 'cal') - total(sel, 'cal'), ideas = kl > 0 ? proIdeas(kl) : [];
+      if (ideas.length) h += '<p class="small2">Ideas to close the gap:</p><ul class="small2 ideas">' + ideas.map(function (f) {
+        return '<li>' + esc(f.n) + ': ' + f.pr + ' g protein, ' + f.k + ' kcal per ' + esc(f.s) + '</li>';
+      }).join('') + '</ul>';
+    }
+    h += '<p class="small2">Based on ' + pp.ref + ' kg adjusted body weight at ' + pp.gpk.toFixed(1) + ' g per kg, about ' + pp.pct + '% of your calories. It rises on active days and follows your weight and goal. Not counted toward Mission accomplished. If you have kidney disease, ask your doctor before eating more protein.</p>';
+    el.innerHTML = h;
+  }
   function weeklyStats() {
-    var days = 0, sum = 0, low = 0;
+    var days = 0, sum = 0, low = 0, pd = 0, ps = 0;
     for (var n = 1; n <= 7; n++) {
       var d = addDays(today, -n), eaten = total(d, 'cal'), pl = plan(d);
       if (!pl || eaten <= 0) continue;
       days++; sum += pl.tdee - eaten;
       if (eaten < pl.floor) low++;
+      var pr = proTotal(d);
+      if (pr > 0) { pd++; ps += pr; }
     }
-    return { days: days, avg: days ? Math.round(sum / days) : 0, low: low };
+    return { days: days, avg: days ? Math.round(sum / days) : 0, low: low, proDays: pd, proAvg: pd ? Math.round(ps / pd) : 0 };
   }
   function weighTrend() {
     var cut = addDays(today, -35), l = state.weights.filter(function (w) { return w.date >= cut; });
@@ -1017,7 +1503,8 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
       '<dt>Logged exercise</dt><dd>' + num(pl.ex) + '</dd>' +
       '<dt class="tot">Estimated burn</dt><dd class="tot">' + num(pl.tdee) + '</dd>' +
       '<dt>Eaten</dt><dd>' + num(eaten) + '</dd>' +
-      '<dt>' + (rem >= 0 ? 'Left to eat' : 'Over target') + '</dt><dd>' + num(Math.abs(rem)) + '</dd></dl>';
+      '<dt>' + (rem >= 0 ? 'Left to eat' : 'Over target') + '</dt><dd>' + num(Math.abs(rem)) + '</dd>' +
+      (proPlan(sel) ? '<dt>Protein (eaten / target)</dt><dd>' + Math.round(proTotal(sel)) + ' / ' + proPlan(sel).g + ' g</dd>' : '') + '</dl>';
     var v = null;
     if (eaten > 0 && sel < today) v = dayVerdict(pl, eaten);
     if (v) {
@@ -1033,6 +1520,8 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     if (ws.days >= 3) {
       u.push('Last 7 days, ' + ws.days + ' days logged: average ' + (ws.avg >= 0 ? num(ws.avg) + ' kcal under' : num(-ws.avg) + ' kcal over') + ' your estimated burn, about ' + dW(-ws.avg * 7 / 7700) + ' a week by the numbers.');
     } else u.push('Log at least 3 days to see your weekly average.');
+    var tp = proPlan(today);
+    if (ws.proDays >= 3 && tp) u.push('Protein, last 7 days: average ' + ws.proAvg + ' g a day, against a target of about ' + tp.g + ' g.');
     if (wt !== null) {
       var cm = 'Your weigh-ins show ' + dW(wt) + ' a week. Body weight swings a kilo or two from water, so judge it over weeks. The weigh-ins are the real measure.';
       if (pl.goal === 'lose' && weighSpan >= 14) {
@@ -1160,7 +1649,7 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     var list = entriesOf(sel).slice().sort(function (a, b) { return b.t - a.t; });
     $('#logMeta').textContent = list.length ? list.length + (list.length === 1 ? ' entry' : ' entries') : 'Empty';
     $('#log').innerHTML = list.length ? list.map(function (e) {
-      var what = e.k === 'cal' ? num(e.v) + ' kcal' + (e.note ? ' &middot; ' + esc(e.note) : '')
+      var what = e.k === 'cal' ? num(e.v) + ' kcal' + (e.pr ? ' &middot; ' + Math.round(e.pr) + ' g protein' : '') + (e.note ? ' &middot; ' + esc(e.note) : '')
         : e.k === 'water' ? '1 glass of water'
         : moveLabel(e);
       var t = new Date(e.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -1188,6 +1677,7 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
     renderBalance();
     updateActHint();
     renderMoveRecent();
+    renderPro();
   }
 
   /* ---- events ---- */
@@ -1209,8 +1699,8 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
   $('#waterMinus').addEventListener('click', removeLastWater);
   $('#calForm').addEventListener('submit', function (e) {
     e.preventDefault();
-    add('cal', $('#calIn').value, $('#calNote').value.trim());
-    $('#calIn').value = ''; $('#calNote').value = ''; $('#calIn').focus();
+    add('cal', $('#calIn').value, $('#calNote').value.trim(), { pr: Number($('#calPro').value) || 0 });
+    $('#calIn').value = ''; $('#calNote').value = ''; $('#calPro').value = ''; $('#calIn').focus();
   });
   $('#moveForm').addEventListener('submit', function (e) {
     e.preventDefault();
@@ -1282,10 +1772,12 @@ details.more summary { cursor: pointer; min-height: 44px; display: flex; align-i
   $('#myFoodForm').addEventListener('submit', function (e) {
     e.preventDefault();
     var n = $('#myFoodName').value.trim().slice(0, 40), k = Math.round(Number($('#myFoodKcal').value));
+    var prRaw = $('#myFoodPro').value, food = { n: n, k: k };
     if (!n || !(k > 0)) return;
-    state.customFoods = state.customFoods.filter(function (c) { return c.n.toLowerCase() !== n.toLowerCase(); }).concat([{ n: n, k: k }]).slice(-200);
+    if (prRaw !== '' && Number(prRaw) >= 0) food.pr = Math.round(Math.min(Number(prRaw), 500) * 10) / 10;
+    state.customFoods = state.customFoods.filter(function (c) { return c.n.toLowerCase() !== n.toLowerCase(); }).concat([food]).slice(-200);
     saveLocal(); pushMeta();
-    $('#myFoodName').value = ''; $('#myFoodKcal').value = '';
+    $('#myFoodName').value = ''; $('#myFoodKcal').value = ''; $('#myFoodPro').value = '';
     $('#foodQ').value = n; renderFoodRes();
     toast('Saved. Find it by searching its name.');
   });

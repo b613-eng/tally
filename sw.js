@@ -1,4 +1,4 @@
-const CACHE = 'daily-tally-v7';
+const CACHE = 'daily-tally-v8';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {
